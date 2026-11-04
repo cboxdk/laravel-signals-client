@@ -388,5 +388,35 @@
         "source_id": "customer"
       }
     }
+  },
+  {
+    "name": "comparison-before-outcome-map",
+    "schema": "Expression",
+    "valid": true,
+    "data": {
+      "path": "$.data.code",
+      "compare": {
+        "type": "integer",
+        "operator": "gte",
+        "value": "400"
+      },
+      "enum": {
+        "true": "denied",
+        "false": "allowed"
+      }
+    }
+  },
+  {
+    "name": "text-cannot-be-ordered",
+    "schema": "Expression",
+    "valid": false,
+    "data": {
+      "path": "$.data.code",
+      "compare": {
+        "type": "string",
+        "operator": "lt",
+        "value": "abc"
+      }
+    }
   }
 ]

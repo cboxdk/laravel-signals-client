@@ -465,6 +465,64 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "compare": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "integer",
+                "number",
+                "string",
+                "boolean",
+                "timestamp"
+              ]
+            },
+            "operator": {
+              "enum": [
+                "eq",
+                "ne",
+                "gt",
+                "gte",
+                "lt",
+                "lte"
+              ]
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "type",
+            "operator",
+            "value"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "string",
+                      "boolean"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "operator": {
+                    "enum": [
+                      "eq",
+                      "ne"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
         }
       },
       "required": [],
