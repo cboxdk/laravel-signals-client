@@ -296,5 +296,97 @@
       "retention_days": 7,
       "status": "ready"
     }
+  },
+  {
+    "name": "management-read",
+    "schema": "ManagementRecord",
+    "valid": true,
+    "data": {
+      "id": "7e4602dd-563e-4c76-8192-b4b84a592dc1",
+      "version": 1,
+      "status": "draft",
+      "name": "Production receiver",
+      "definition": {
+        "url": "https://example.test/receive",
+        "types": [
+          "signal.created"
+        ]
+      }
+    }
+  },
+  {
+    "name": "management-must-not-leak-secret",
+    "schema": "ManagementRecord",
+    "valid": false,
+    "data": {
+      "id": "7e4602dd-563e-4c76-8192-b4b84a592dc1",
+      "version": 1,
+      "status": "draft",
+      "name": "Production receiver",
+      "definition": {
+        "url": "https://example.test/receive",
+        "types": [
+          "signal.created"
+        ]
+      },
+      "secret": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  },
+  {
+    "name": "management-must-not-leak-reference",
+    "schema": "ManagementRecord",
+    "valid": false,
+    "data": {
+      "id": "7e4602dd-563e-4c76-8192-b4b84a592dc1",
+      "version": 1,
+      "status": "draft",
+      "name": "Production receiver",
+      "definition": {
+        "secret_reference": "private"
+      }
+    }
+  },
+  {
+    "name": "management-creation-secret",
+    "schema": "ManagementCreated",
+    "valid": true,
+    "data": {
+      "id": "7e4602dd-563e-4c76-8192-b4b84a592dc1",
+      "version": 1,
+      "status": "draft",
+      "name": "Production receiver",
+      "definition": {
+        "url": "https://example.test/receive",
+        "types": [
+          "signal.created"
+        ]
+      },
+      "secret": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  {
+    "name": "management-customer-connection",
+    "schema": "ManagementCreate",
+    "valid": true,
+    "data": {
+      "name": "Customer",
+      "definition": {
+        "type": "events_api",
+        "source_id": "customer"
+      }
+    }
+  },
+  {
+    "name": "management-foreign-scope",
+    "schema": "ManagementCreate",
+    "valid": false,
+    "data": {
+      "name": "Injected",
+      "project": "foreign",
+      "definition": {
+        "type": "events_api",
+        "source_id": "customer"
+      }
+    }
   }
 ]

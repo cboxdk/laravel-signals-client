@@ -1618,6 +1618,611 @@
           ]
         }
       }
+    },
+    "ManagementMapping": {
+      "type": "object",
+      "properties": {
+        "event": {
+          "type": "string",
+          "minLength": 1
+        },
+        "schema_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "observation": {
+          "enum": [
+            "access.attempt",
+            "identity.login",
+            "billing.payment",
+            "billing.refund"
+          ]
+        },
+        "subject": {
+          "$ref": "#/$defs/EntityMapping"
+        },
+        "resource": {
+          "$ref": "#/$defs/EntityMapping"
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "event",
+        "schema_version",
+        "observation",
+        "subject",
+        "fields"
+      ],
+      "additionalProperties": false
+    },
+    "ManagementSchema": {
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1
+        },
+        "schema_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "document": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "source_id",
+        "event",
+        "schema_version",
+        "document"
+      ],
+      "additionalProperties": false
+    },
+    "ManagementBinding": {
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "from": {
+          "$ref": "#/$defs/Entity"
+        },
+        "to": {
+          "$ref": "#/$defs/Entity"
+        },
+        "provenance": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "source_id",
+        "from",
+        "to",
+        "provenance"
+      ],
+      "additionalProperties": false
+    },
+    "ManagementDetector": {
+      "type": "object",
+      "properties": {
+        "template": {
+          "enum": [
+            "distinct_targets_on_denial",
+            "new_login_context",
+            "refund_rate_changed",
+            "memory_growth"
+          ]
+        },
+        "mapping_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mapping_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "window_seconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 86400
+        },
+        "threshold": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "minimum_samples": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 10000
+        },
+        "ttl_seconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 86400
+        },
+        "mode": {
+          "enum": [
+            "observe",
+            "active",
+            "disabled"
+          ]
+        }
+      },
+      "required": [
+        "template",
+        "window_seconds",
+        "threshold",
+        "minimum_samples",
+        "ttl_seconds",
+        "mode"
+      ],
+      "additionalProperties": false
+    },
+    "ManagementDestination": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "types": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "signal.created",
+              "signal.updated",
+              "signal.resolved",
+              "signal.expired"
+            ]
+          }
+        }
+      },
+      "required": [
+        "url",
+        "types"
+      ],
+      "additionalProperties": false
+    },
+    "ManagementConnection": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "events_api",
+            "id_events",
+            "billing_events",
+            "clickhouse_events",
+            "telemetry_metrics"
+          ]
+        },
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "paused": {
+          "type": "boolean"
+        },
+        "backfill_limit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "organization_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "event_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "database": {
+          "type": "string",
+          "minLength": 1
+        },
+        "view": {
+          "type": "string",
+          "minLength": 1
+        },
+        "telemetry_project": {
+          "type": "string",
+          "minLength": 1
+        },
+        "import_from": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "metric_bindings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "metric": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "enum": [
+                  "runtime.memory",
+                  "runtime.load"
+                ]
+              },
+              "unit": {
+                "enum": [
+                  "bytes",
+                  "1/s"
+                ]
+              },
+              "namespace": {
+                "type": "string",
+                "minLength": 1
+              },
+              "entity_type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "entity_label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "dimensions": {
+                "type": "object",
+                "properties": {
+                  "instance": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "deployment": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "restart": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "instance",
+                  "deployment",
+                  "restart"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "metric",
+              "name",
+              "unit",
+              "namespace",
+              "entity_type",
+              "entity_label",
+              "dimensions"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "type",
+        "source_id"
+      ],
+      "additionalProperties": false
+    },
+    "ManagementCreate": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "definition": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ManagementMapping"
+            },
+            {
+              "$ref": "#/$defs/ManagementSchema"
+            },
+            {
+              "$ref": "#/$defs/ManagementBinding"
+            },
+            {
+              "$ref": "#/$defs/ManagementDetector"
+            },
+            {
+              "$ref": "#/$defs/ManagementDestination"
+            },
+            {
+              "$ref": "#/$defs/ManagementConnection"
+            }
+          ]
+        },
+        "token": {
+          "type": "string",
+          "writeOnly": true
+        },
+        "username": {
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "required": [
+        "name",
+        "definition"
+      ],
+      "additionalProperties": false
+    },
+    "ManagementReplace": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "definition": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ManagementMapping"
+            },
+            {
+              "$ref": "#/$defs/ManagementSchema"
+            },
+            {
+              "$ref": "#/$defs/ManagementBinding"
+            },
+            {
+              "$ref": "#/$defs/ManagementDetector"
+            },
+            {
+              "$ref": "#/$defs/ManagementDestination"
+            },
+            {
+              "$ref": "#/$defs/ManagementConnection"
+            }
+          ]
+        },
+        "token": {
+          "type": "string",
+          "writeOnly": true
+        },
+        "username": {
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "required": [
+        "definition"
+      ],
+      "additionalProperties": false
+    },
+    "ManagementRotate": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "writeOnly": true
+        },
+        "username": {
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "ManagementRecord": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "definition": {
+          "type": "object",
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "token"
+                ]
+              },
+              {
+                "required": [
+                  "password"
+                ]
+              },
+              {
+                "required": [
+                  "secret_reference"
+                ]
+              },
+              {
+                "required": [
+                  "secret"
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "version",
+        "status",
+        "definition"
+      ],
+      "additionalProperties": false
+    },
+    "ManagementCreated": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "definition": {
+          "type": "object",
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "token"
+                ]
+              },
+              {
+                "required": [
+                  "password"
+                ]
+              },
+              {
+                "required": [
+                  "secret_reference"
+                ]
+              },
+              {
+                "required": [
+                  "secret"
+                ]
+              }
+            ]
+          }
+        },
+        "secret": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "One-time signing key on destination creation or rotation only."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "version",
+        "status",
+        "definition"
+      ],
+      "additionalProperties": false
+    },
+    "ManagementPage": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ManagementRecord"
+          }
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "data",
+        "next_cursor"
+      ],
+      "additionalProperties": false
+    },
+    "ManagementActivation": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "ManagementError": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "errors": {
+          "type": "object"
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "message"
+          ]
+        },
+        {
+          "required": [
+            "code"
+          ]
+        }
+      ]
     }
   }
 }
