@@ -16,6 +16,7 @@ use Cbox\Signals\Data\MetricBatch;
 use Cbox\Signals\Data\Operation;
 use Cbox\Signals\Data\Receipt;
 use Cbox\Signals\Data\ReplayRequest;
+use Cbox\Signals\Data\RetentionState;
 use Cbox\Signals\Data\SignalDetail;
 use Cbox\Signals\Data\SignalFilter;
 use Cbox\Signals\Data\SignalPage;
@@ -133,6 +134,32 @@ class FakeSignals implements Signals
         }
         if ($result === null) {
             throw new LogicException('No connections response was configured for this test.');
+        }
+
+        return $result;
+    }
+
+    /** @var list<RetentionState|Throwable> */
+    private array $retentionResponses = [];
+
+    public int $retentionCalls = 0;
+
+    public function queueRetention(RetentionState|Throwable $result): self
+    {
+        $this->retentionResponses[] = $result;
+
+        return $this;
+    }
+
+    public function retention(): RetentionState
+    {
+        $this->retentionCalls++;
+        $result = array_shift($this->retentionResponses);
+        if ($result instanceof Throwable) {
+            throw $result;
+        }
+        if ($result === null) {
+            throw new LogicException('No retention response was configured for this test.');
         }
 
         return $result;

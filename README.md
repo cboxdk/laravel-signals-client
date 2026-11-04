@@ -196,3 +196,9 @@ Test fakes expose `queueSignals`, `queueSignal`, `queueDetectors` and
 errors. `tests/ReadTest.php` verifies pagination, historical evidence, incomplete
 states, malformed responses and access refusal. The real SDK acceptance additionally
 reads persisted metric findings/details/status before replay and entity erasure.
+
+`$signals->retention()` reads the credential-scoped policy and operational/history
+cleanup watermarks. `pending_history` means ClickHouse cleanup is not yet confirmed;
+a configured number of retention days alone is not evidence of completed cleanup.
+Read access is required. The test fake requires `queueRetention($state)` or an
+explicit exception; it never supplies a fabricated ready state.

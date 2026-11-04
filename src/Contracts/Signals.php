@@ -15,6 +15,7 @@ use Cbox\Signals\Data\MetricBatch;
 use Cbox\Signals\Data\Operation;
 use Cbox\Signals\Data\Receipt;
 use Cbox\Signals\Data\ReplayRequest;
+use Cbox\Signals\Data\RetentionState;
 use Cbox\Signals\Data\SignalDetail;
 use Cbox\Signals\Data\SignalFilter;
 use Cbox\Signals\Data\SignalPage;
@@ -30,6 +31,8 @@ interface Signals
 
     /** @return list<ConnectionState> */
     public function connections(): array;
+
+    public function retention(): RetentionState;
 
     public function events(EventBatch $batch, string $idempotencyKey): Receipt;
 

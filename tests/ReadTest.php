@@ -59,3 +59,19 @@ it('requires explicit test responses for each read surface', function (): void {
     expect($fake->signals()->data)->toBe([])->and($fake->detectors())->toBe([])->and($fake->connections())->toBe([]);
     expect(fn () => $fake->signal('unknown'))->toThrow(SignalsFailure::class);
 });
+
+it('reads pending retention without claiming history completion and refuses malformed success', function (): void {
+    $data = ['retention_days' => 1, 'status' => 'pending_history', 'operational_purged_before' => '2026-11-03T10:00:00Z', 'history_purged_before' => null, 'last_completed_at' => null, 'next_run_at' => '2026-11-04T11:00:00Z'];
+    $http = new Factory;
+    $http->fakeSequence()->push($data)->push([...$data, 'retention_days' => 0])->push(['status' => 'ready'])->push([...$data, 'status' => 'invented']);
+    $client = new HttpSignals($http, 'https://signals.test', 'read-key');
+    $state = $client->retention();
+    expect($state->days)->toBe(1)->and($state->status)->toBe('pending_history')->and($state->historyPurgedBefore)->toBeNull()->and($state->lastCompletedAt)->toBeNull();
+    $http->assertSent(fn ($request) => $request->method() === 'GET' && $request->url() === 'https://signals.test/v1/retention');
+    expect(fn () => $client->retention())->toThrow(SignalsFailure::class);
+    expect(fn () => $client->retention())->toThrow(SignalsFailure::class);
+    expect(fn () => $client->retention())->toThrow(SignalsFailure::class);
+    $fake = (new FakeSignals)->queueRetention($state);
+    expect($fake->retention())->toBe($state)->and($fake->retentionCalls)->toBe(1);
+    expect(fn () => $fake->retention())->toThrow(LogicException::class);
+});

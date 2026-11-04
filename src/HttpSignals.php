@@ -17,6 +17,7 @@ use Cbox\Signals\Data\MetricBatch;
 use Cbox\Signals\Data\Operation;
 use Cbox\Signals\Data\Receipt;
 use Cbox\Signals\Data\ReplayRequest;
+use Cbox\Signals\Data\RetentionState;
 use Cbox\Signals\Data\Signal;
 use Cbox\Signals\Data\SignalDetail;
 use Cbox\Signals\Data\SignalFilter;
@@ -52,6 +53,11 @@ class HttpSignals implements Signals
         $data = $this->request('GET', '/v1/connections', []);
 
         return array_map(static fn (mixed $item): ConnectionState => ConnectionState::fromArray(Wire::object($item)), Wire::items($data['data'] ?? null));
+    }
+
+    public function retention(): RetentionState
+    {
+        return RetentionState::fromArray($this->request('GET', '/v1/retention', []));
     }
 
     public function events(EventBatch $batch, string $idempotencyKey): Receipt

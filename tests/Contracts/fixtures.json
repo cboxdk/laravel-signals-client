@@ -274,5 +274,27 @@
         "device_id": "device-1"
       }
     }
+  },
+  {
+    "name": "retention-pending-history",
+    "schema": "RetentionState",
+    "valid": true,
+    "data": {
+      "retention_days": 7,
+      "status": "pending_history",
+      "operational_purged_before": "2026-10-28T10:00:00Z",
+      "history_purged_before": null,
+      "last_completed_at": null,
+      "next_run_at": "2026-11-04T11:00:00Z"
+    }
+  },
+  {
+    "name": "retention-missing-watermarks",
+    "schema": "RetentionState",
+    "valid": false,
+    "data": {
+      "retention_days": 7,
+      "status": "ready"
+    }
   }
 ]
