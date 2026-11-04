@@ -1,11 +1,11 @@
 <?php
 
-use Cbox\Signals\Contracts\Signals;
 use Cbox\Signals\Data\Event;
 use Cbox\Signals\Data\EventBatch;
 use Cbox\Signals\Data\Receipt;
 use Cbox\Signals\DatabaseEventOutbox;
 use Cbox\Signals\Exceptions\SignalsFailure;
+use Cbox\Signals\Testing\FakeSignals;
 use Cbox\Signals\Webhooks\DatabaseSignalInbox;
 use Cbox\Signals\Webhooks\SignalEnvelope;
 use Cbox\Signals\Webhooks\VerifySignalWebhook;
@@ -55,7 +55,7 @@ it('verifies exact signed bytes with rotation and rejects wrong scopes and old t
 });
 
 it('rolls events back with business data and resends identical batches after a lost response', function (): void {
-    $client = Mockery::mock(Signals::class);
+    $client = new FakeSignals;
     $outbox = new DatabaseEventOutbox(DB::connection(), $client);
     $id = Str::uuid()->toString();
     $batch = new EventBatch('customer', [new Event('e1', 'document.checked', 1, new DateTimeImmutable, ['allowed' => false])]);
@@ -66,9 +66,13 @@ it('rolls events back with business data and resends identical batches after a l
     $outbox->enqueue($batch, $id);
     $outbox->enqueue($batch, $id);
     expect(DB::table('signals_event_outbox')->count())->toBe(1);
-    $client->shouldReceive('events')->once()->withArgs(fn ($sent, $key) => $sent->toArray() === $batch->toArray() && $key === $id)->andThrow(new SignalsFailure('unavailable', 503));
+    $client->queueReceipt('events', new SignalsFailure('unavailable', 503));
     expect($outbox->dispatch())->toBeTrue()->and($outbox->dispatch())->toBeFalse();
-    $client->shouldReceive('events')->once()->withArgs(fn ($sent, $key) => $sent->toArray() === $batch->toArray() && $key === $id)->andReturn(new Receipt('operation', 1, new DateTimeImmutable));
+    $client->queueReceipt('events', new Receipt('operation', 1, new DateTimeImmutable));
     DB::table('signals_event_outbox')->update(['next_attempt_at' => now()->subSecond()]);
     expect($outbox->dispatch())->toBeTrue()->and(DB::table('signals_event_outbox')->value('status'))->toBe('sent');
+    expect($client->eventCalls)->toHaveCount(2);
+    foreach ($client->eventCalls as $call) {
+        expect($call['key'])->toBe($id)->and(json_encode($call['batch']->toArray(), JSON_THROW_ON_ERROR))->toBe(json_encode($batch->toArray(), JSON_THROW_ON_ERROR));
+    }
 });

@@ -10,6 +10,7 @@ use Cbox\Signals\Data\MetricSample;
 use Cbox\Signals\Data\ReplayRequest;
 use Cbox\Signals\Exceptions\SignalsFailure;
 use Cbox\Signals\HttpSignals;
+use Cbox\Signals\Testing\FakeSignals;
 use Illuminate\Http\Client\Factory;
 
 it('transmits stable occurrence and batch identities', function (): void {
@@ -47,4 +48,13 @@ it('uses durable metric and replay contracts with stable request keys', function
     $http->assertSent(fn ($request) => $request->url() === 'https://signals.test/v1/metrics:batch' && $request->hasHeader('Idempotency-Key', 'metrics-stable') && str_contains($request->body(), '"dimensions":{}') && str_contains($request->body(), '123456'));
     $client->replay(new ReplayRequest($at->modify('-1 hour'), $at, 1, 1, 'memory'), 'replay-stable');
     $http->assertSent(fn ($request) => $request->url() === 'https://signals.test/v1/replays' && $request->hasHeader('Idempotency-Key', 'replay-stable') && $request['configuration_revision'] === 1);
+});
+
+it('never invents successful results in its test fake', function (): void {
+    $fake = new FakeSignals;
+    $request = new EvaluationRequest('attempt', new Entity('shop', 'user', 'person'));
+    expect(fn () => $fake->evaluate($request))->toThrow(LogicException::class);
+    $fake->queueEvaluation(new SignalsFailure('quota_exhausted', 429));
+    expect(fn () => $fake->evaluate($request))->toThrow(SignalsFailure::class);
+    expect($fake->evaluationCalls)->toHaveCount(2);
 });

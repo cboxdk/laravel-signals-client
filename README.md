@@ -123,3 +123,13 @@ are reserved for deterministic failure cases; they are not integration evidence.
 
 Do not enable live authentication enforcement or production payments from these
 local proofs. See the application's `BUILD-STATUS.md` for remaining pilot gates.
+
+## Test doubles
+
+`Testing\FakeSignals` implements the same `Contracts\Signals` interface. Bind it
+explicitly in a test and queue each expected result with `queueReceipt('events',
+$receipt)`, `queueReceipt('metrics', $receipt)`, `queueReceipt('replay', $receipt)` or
+`queueEvaluation($evaluation)`. Each queue also accepts an exception to simulate
+failure. Missing responses throw `LogicException`; the fake never invents success.
+Inspect `eventCalls`, `metricCalls`, `replayCalls` and `evaluationCalls` to verify
+payloads and stable retry keys. Production service providers never select this fake.
