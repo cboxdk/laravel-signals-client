@@ -536,7 +536,10 @@
             "access.attempt",
             "identity.login",
             "billing.payment",
-            "billing.refund"
+            "billing.refund",
+            "custom.category",
+            "custom.flag",
+            "custom.number"
           ]
         },
         "subject": {
@@ -1289,7 +1292,10 @@
             "access.attempt",
             "identity.login",
             "billing.payment",
-            "billing.refund"
+            "billing.refund",
+            "custom.category",
+            "custom.flag",
+            "custom.number"
           ]
         },
         "version": {
@@ -1340,6 +1346,17 @@
         },
         "amount_minor": {
           "type": "integer"
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "flag": {
+          "type": "boolean"
+        },
+        "number": {
+          "type": "number"
         }
       },
       "required": [
@@ -1635,7 +1652,10 @@
             "access.attempt",
             "identity.login",
             "billing.payment",
-            "billing.refund"
+            "billing.refund",
+            "custom.category",
+            "custom.flag",
+            "custom.number"
           ]
         },
         "subject": {
@@ -1725,7 +1745,13 @@
             "distinct_targets_on_denial",
             "new_login_context",
             "refund_rate_changed",
-            "memory_growth"
+            "memory_growth",
+            "count",
+            "distinct_count",
+            "rate",
+            "ratio",
+            "new_value",
+            "trend"
           ]
         },
         "mapping_id": {
