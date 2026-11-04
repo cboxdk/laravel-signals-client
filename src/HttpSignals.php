@@ -5,16 +5,19 @@ declare(strict_types=1);
 namespace Cbox\Signals;
 
 use Cbox\Signals\Contracts\Signals;
+use Cbox\Signals\Data\Entity;
+use Cbox\Signals\Data\Erasure;
 use Cbox\Signals\Data\Evaluation;
 use Cbox\Signals\Data\EvaluationRequest;
 use Cbox\Signals\Data\EvaluationStatus;
 use Cbox\Signals\Data\EventBatch;
 use Cbox\Signals\Data\MetricBatch;
+use Cbox\Signals\Data\Operation;
 use Cbox\Signals\Data\Receipt;
 use Cbox\Signals\Data\ReplayRequest;
 use Cbox\Signals\Data\Signal;
 use Cbox\Signals\Exceptions\SignalsFailure;
-use DateTimeImmutable;
+use Cbox\Signals\Support\Wire;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory;
 
@@ -37,6 +40,21 @@ class HttpSignals implements Signals
         return $this->receipt($this->post('/v1/replays', $request->toArray(), $idempotencyKey));
     }
 
+    public function operation(string $id): Operation
+    {
+        return Operation::fromArray($this->request('GET', '/v1/operations/'.rawurlencode($id), []));
+    }
+
+    public function erase(Entity $subject): Erasure
+    {
+        return Erasure::fromArray($this->post('/v1/erasures', ['subject' => $subject->toArray()]));
+    }
+
+    public function erasure(string $id): Erasure
+    {
+        return Erasure::fromArray($this->request('GET', '/v1/erasures/'.rawurlencode($id), []));
+    }
+
     /** @param array<string,mixed> $data */
     private function receipt(array $data): Receipt
     {
@@ -44,7 +62,7 @@ class HttpSignals implements Signals
             throw new SignalsFailure('malformed_response', 503);
         }
 
-        return new Receipt($data['operation_id'], $data['accepted_count'], new DateTimeImmutable($data['accepted_at']));
+        return new Receipt(Wire::text($data['operation_id']), Wire::integer($data['accepted_count']), Wire::date($data['accepted_at']));
     }
 
     public function evaluate(EvaluationRequest $request): Evaluation
@@ -63,7 +81,7 @@ class HttpSignals implements Signals
                 if (! is_string($reason)) {
                     throw new SignalsFailure('malformed_response', 503);
                 }$reasons[] = $reason;
-            }$signals[] = new Signal($signal['type'], $signal['severity'], $reasons, new DateTimeImmutable($signal['expires_at']), is_string($signal['id'] ?? null) ? $signal['id'] : null, is_int($signal['revision'] ?? null) ? $signal['revision'] : null);
+            }$signals[] = new Signal($signal['type'], $signal['severity'], $reasons, Wire::date($signal['expires_at']), is_string($signal['id'] ?? null) ? $signal['id'] : null, is_int($signal['revision'] ?? null) ? $signal['revision'] : null);
         }
         $coverage = [];
         foreach ($data['coverage'] as $key => $value) {
@@ -72,12 +90,19 @@ class HttpSignals implements Signals
             }$coverage[$key] = $value;
         }
 
-        return new Evaluation($data['evaluation_id'], $status, $signals, $coverage, is_string($data['data_as_of'] ?? null) ? new DateTimeImmutable($data['data_as_of']) : null, $data['config_version']);
+        return new Evaluation($data['evaluation_id'], $status, $signals, $coverage, isset($data['data_as_of']) ? Wire::date($data['data_as_of']) : null, $data['config_version']);
     }
 
     /** @param array<string,mixed> $body
      * @return array<string,mixed> */
     private function post(string $path, array $body, ?string $key = null): array
+    {
+        return $this->request('POST', $path, $body, $key);
+    }
+
+    /** @param array<string,mixed> $body
+     * @return array<string,mixed> */
+    private function request(string $method, string $path, array $body, ?string $key = null): array
     {
         if ($this->url === '' || $this->token === '') {
             throw new SignalsFailure('not_configured', 503);
@@ -86,7 +111,7 @@ class HttpSignals implements Signals
             $request = $this->http->withToken($this->token)->acceptJson()->timeout($this->timeout)->connectTimeout(min($this->timeout, 1))->withoutRedirecting();
             if ($key !== null) {
                 $request = $request->withHeaders(['Idempotency-Key' => $key]);
-            }$response = $request->post(rtrim($this->url, '/').$path, $body);
+            }$response = $method === 'GET' ? $request->get(rtrim($this->url, '/').$path, $body) : $request->post(rtrim($this->url, '/').$path, $body);
         } catch (ConnectionException) {
             throw new SignalsFailure('unavailable', 503);
         }

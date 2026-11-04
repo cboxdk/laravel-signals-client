@@ -133,3 +133,26 @@ $receipt)`, `queueReceipt('metrics', $receipt)`, `queueReceipt('replay', $receip
 failure. Missing responses throw `LogicException`; the fake never invents success.
 Inspect `eventCalls`, `metricCalls`, `replayCalls` and `evaluationCalls` to verify
 payloads and stable retry keys. Production service providers never select this fake.
+
+### Follow accepted work and erase an entity
+
+`Signals::operation($receipt->operationId)` returns an `Operation` with an
+`OperationState` (`Accepted`, `Completed`, `Failed`), accepted count, nullable error
+code and typed isolated `ReplayResult`. Acceptance is not completion. Poll with a
+bounded deadline/backoff appropriate to the caller; a failed operation is not a
+successful zero-result replay. Replay responses declaring live deliveries or
+billable events are rejected as malformed.
+
+`Signals::erase(new Entity(...))` requires a `manage` key. Retry the same entity to
+obtain the same request ID; use `Signals::erasure($id)` to follow `Pending`,
+`PendingHistory`, then `Completed`. Only `Completed` confirms removal from the
+operational and analytical stores. Usage/deduplication records survive, and the
+entity tombstone refuses new ingestion. This API does not delete a whole project
+or retroactively remove encrypted backup copies; follow the service's recovery
+and retention procedure for those.
+
+All read/status responses use the same bounded authenticated transport and refuse
+redirects. Malformed states and invalid RFC3339 timestamps raise `SignalsFailure`
+instead of returning invented status or leaking a date-parser exception. Test
+fakes require explicit `queueOperation()` and `queueErasure('erase'|'erasure', …)`
+responses; exhausted queues throw.

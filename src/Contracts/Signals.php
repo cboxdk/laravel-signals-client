@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Cbox\Signals\Contracts;
 
+use Cbox\Signals\Data\Entity;
+use Cbox\Signals\Data\Erasure;
 use Cbox\Signals\Data\Evaluation;
 use Cbox\Signals\Data\EvaluationRequest;
 use Cbox\Signals\Data\EventBatch;
 use Cbox\Signals\Data\MetricBatch;
+use Cbox\Signals\Data\Operation;
 use Cbox\Signals\Data\Receipt;
 use Cbox\Signals\Data\ReplayRequest;
 
@@ -20,4 +23,10 @@ interface Signals
     public function replay(ReplayRequest $request, string $idempotencyKey): Receipt;
 
     public function evaluate(EvaluationRequest $request): Evaluation;
+
+    public function operation(string $id): Operation;
+
+    public function erase(Entity $subject): Erasure;
+
+    public function erasure(string $id): Erasure;
 }

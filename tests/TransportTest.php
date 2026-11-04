@@ -1,12 +1,15 @@
 <?php
 
 use Cbox\Signals\Data\Entity;
+use Cbox\Signals\Data\Erasure;
+use Cbox\Signals\Data\ErasureState;
 use Cbox\Signals\Data\EvaluationRequest;
 use Cbox\Signals\Data\Event;
 use Cbox\Signals\Data\EventBatch;
 use Cbox\Signals\Data\MetricBatch;
 use Cbox\Signals\Data\MetricKind;
 use Cbox\Signals\Data\MetricSample;
+use Cbox\Signals\Data\OperationState;
 use Cbox\Signals\Data\ReplayRequest;
 use Cbox\Signals\Exceptions\SignalsFailure;
 use Cbox\Signals\HttpSignals;
@@ -57,4 +60,49 @@ it('never invents successful results in its test fake', function (): void {
     $fake->queueEvaluation(new SignalsFailure('quota_exhausted', 429));
     expect(fn () => $fake->evaluate($request))->toThrow(SignalsFailure::class);
     expect($fake->evaluationCalls)->toHaveCount(2);
+});
+
+it('reads typed completion and replay results without confusing them with acceptance', function (): void {
+    $http = new Factory;
+    $result = ['mode' => 'isolated', 'configuration_revision' => 2, 'detector_id' => 'memory', 'results' => ['customer' => ['status' => 'ready', 'data_as_of' => '2026-11-04T12:00:00Z', 'finding' => ['type' => 'runtime.memory_growth', 'severity' => 'medium', 'reasons' => ['growth'], 'evidence' => [['measure' => 'bytes', 'value' => 128, 'occurrences' => ['sample-1']]]]]], 'live_deliveries' => false, 'billable_events' => 0];
+    $http->fake(['*' => Factory::response(['id' => 'op_1', 'status' => 'completed', 'accepted_count' => 12, 'error_code' => null, 'result' => $result])]);
+    $client = new HttpSignals($http, 'https://signals.test', 'key');
+    $operation = $client->operation('op_1');
+    expect($operation->status)->toBe(OperationState::Completed)
+        ->and($operation->result->results['customer']->finding->evidence[0]->value)->toBe(128.0);
+    $http->assertSent(fn ($request) => $request->method() === 'GET' && $request->url() === 'https://signals.test/v1/operations/op_1');
+    foreach (['live_deliveries' => true, 'billable_events' => 1, 'mode' => 'live'] as $key => $value) {
+        $bad = $result;
+        $bad[$key] = $value;
+        $http = new Factory;
+        $http->fake(['*' => Factory::response(['id' => 'op_1', 'status' => 'completed', 'accepted_count' => 12, 'error_code' => null, 'result' => $bad])]);
+        expect(fn () => (new HttpSignals($http, 'https://signals.test', 'key'))->operation('op_1'))->toThrow(SignalsFailure::class);
+    }
+});
+
+it('requests erasure and polls pending history without claiming deletion is complete', function (): void {
+    $http = new Factory;
+    $http->fakeSequence()->push(['id' => 'erase_1', 'status' => 'pending'], 202)->push(['id' => 'erase_1', 'status' => 'pending_history'])->push(['id' => 'erase_1', 'status' => 'completed']);
+    $client = new HttpSignals($http, 'https://signals.test', 'key');
+    $request = $client->erase(new Entity('shop', 'user', 'one'));
+    expect($request->status)->toBe(ErasureState::Pending)
+        ->and($client->erasure($request->id)->status)->toBe(ErasureState::PendingHistory)
+        ->and($client->erasure($request->id)->status)->toBe(ErasureState::Completed);
+    $http->assertSent(fn ($request) => $request->method() === 'POST' && $request->url() === 'https://signals.test/v1/erasures' && $request['subject']['namespace'] === 'shop');
+    $fake = new FakeSignals;
+    expect(fn () => $fake->erase(new Entity('shop', 'user', 'one')))->toThrow(LogicException::class);
+    $fake->queueErasure('erasure', new Erasure('erase_1', ErasureState::PendingHistory));
+    expect($fake->erasure('erase_1')->status)->toBe(ErasureState::PendingHistory);
+    expect(fn () => $fake->operation('op_1'))->toThrow(LogicException::class);
+});
+
+it('rejects malformed states and timestamps as transport failures', function (): void {
+    foreach (['tomorrow', '2026-02-30T12:00:00Z', 'not-a-date'] as $date) {
+        $http = new Factory;
+        $http->fake(['*' => Factory::response(['operation_id' => 'op_1', 'accepted_count' => 1, 'accepted_at' => $date], 202)]);
+        expect(fn () => (new HttpSignals($http, 'https://signals.test', 'key'))->events(new EventBatch('customer', []), 'key'))->toThrow(SignalsFailure::class);
+    }
+    $http = new Factory;
+    $http->fake(['*' => Factory::response(['id' => 'erase_1', 'status' => 'maybe'])]);
+    expect(fn () => (new HttpSignals($http, 'https://signals.test', 'key'))->erasure('erase_1'))->toThrow(SignalsFailure::class);
 });
