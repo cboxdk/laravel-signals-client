@@ -1955,13 +1955,35 @@
             ],
             "additionalProperties": false
           }
+        },
+        "cursor_mode": {
+          "const": "timestamp"
         }
       },
       "required": [
         "type",
         "source_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "cursor_mode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "type": {
+                "const": "clickhouse_events"
+              }
+            },
+            "required": [
+              "import_from"
+            ]
+          }
+        }
+      ]
     },
     "ManagementCreate": {
       "type": "object",
