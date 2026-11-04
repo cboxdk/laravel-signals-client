@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Cbox\Signals\Testing;
 
 use Cbox\Signals\Contracts\Signals;
+use Cbox\Signals\Data\ConnectionState;
+use Cbox\Signals\Data\DetectorState;
 use Cbox\Signals\Data\Entity;
 use Cbox\Signals\Data\Erasure;
 use Cbox\Signals\Data\Evaluation;
@@ -14,6 +16,9 @@ use Cbox\Signals\Data\MetricBatch;
 use Cbox\Signals\Data\Operation;
 use Cbox\Signals\Data\Receipt;
 use Cbox\Signals\Data\ReplayRequest;
+use Cbox\Signals\Data\SignalDetail;
+use Cbox\Signals\Data\SignalFilter;
+use Cbox\Signals\Data\SignalPage;
 use InvalidArgumentException;
 use LogicException;
 use Throwable;
@@ -21,6 +26,118 @@ use Throwable;
 /** Explicit test responses only. The production provider never binds this fake. */
 class FakeSignals implements Signals
 {
+    /** @var list<SignalPage|Throwable> */
+    private array $signalsResponses = [];
+
+    /** @var list<SignalFilter|null> */
+    public array $signalsCalls = [];
+
+    public function queueSignals(SignalPage|Throwable $result): self
+    {
+        $this->signalsResponses[] = $result;
+
+        return $this;
+    }
+
+    public function signals(?SignalFilter $filter = null): SignalPage
+    {
+        $this->signalsCalls[] = $filter;
+        $result = array_shift($this->signalsResponses);
+        if ($result instanceof Throwable) {
+            throw $result;
+        }
+        if ($result === null) {
+            throw new LogicException('No signals response was configured for this test.');
+        }
+
+        return $result;
+    }
+
+    /** @var list<SignalDetail|Throwable> */
+    private array $signalResponses = [];
+
+    /** @var list<string> */
+    public array $signalCalls = [];
+
+    public function queueSignal(SignalDetail|Throwable $result): self
+    {
+        $this->signalResponses[] = $result;
+
+        return $this;
+    }
+
+    public function signal(string $id): SignalDetail
+    {
+        $this->signalCalls[] = $id;
+        $result = array_shift($this->signalResponses);
+        if ($result instanceof Throwable) {
+            throw $result;
+        }
+        if ($result === null) {
+            throw new LogicException('No signal response was configured for this test.');
+        }
+
+        return $result;
+    }
+
+    /** @var list<list<DetectorState>|Throwable> */
+    private array $detectorsResponses = [];
+
+    /** @var list<null> */
+    public array $detectorsCalls = [];
+
+    /** @param list<DetectorState>|Throwable $result */
+    public function queueDetectors(array|Throwable $result): self
+    {
+        $this->detectorsResponses[] = $result;
+
+        return $this;
+    }
+
+    /** @return list<DetectorState> */
+    public function detectors(): array
+    {
+        $this->detectorsCalls[] = null;
+        $result = array_shift($this->detectorsResponses);
+        if ($result instanceof Throwable) {
+            throw $result;
+        }
+        if ($result === null) {
+            throw new LogicException('No detectors response was configured for this test.');
+        }
+
+        return $result;
+    }
+
+    /** @var list<list<ConnectionState>|Throwable> */
+    private array $connectionsResponses = [];
+
+    /** @var list<null> */
+    public array $connectionsCalls = [];
+
+    /** @param list<ConnectionState>|Throwable $result */
+    public function queueConnections(array|Throwable $result): self
+    {
+        $this->connectionsResponses[] = $result;
+
+        return $this;
+    }
+
+    /** @return list<ConnectionState> */
+    public function connections(): array
+    {
+        $this->connectionsCalls[] = null;
+        $result = array_shift($this->connectionsResponses);
+        if ($result instanceof Throwable) {
+            throw $result;
+        }
+        if ($result === null) {
+            throw new LogicException('No connections response was configured for this test.');
+        }
+
+        return $result;
+    }
+
     /** @var list<array{batch: EventBatch, key: string}> */
     public array $eventCalls = [];
 

@@ -156,3 +156,43 @@ redirects. Malformed states and invalid RFC3339 timestamps raise `SignalsFailure
 instead of returning invented status or leaking a date-parser exception. Test
 fakes require explicit `queueOperation()` and `queueErasure('erase'|'erasure', …)`
 responses; exhausted queues throw.
+
+### Read signals, evidence and source health
+
+Use a key with `read` scope. All results remain confined to that key's project and
+environment; these methods cannot select another tenant.
+
+```php
+use Cbox\Signals\Data\SignalFilter;
+
+$page = $signals->signals(new SignalFilter(status: 'active', severity: 'high'));
+foreach ($page->data as $finding) {
+    $detail = $signals->signal($finding->id);
+    // $detail->signal->evidence contains typed measures and occurrence references.
+    // $detail->revisions and ->deliveries contain bounded history, never secrets.
+}
+if ($page->nextCursor !== null) {
+    $next = $signals->signals(new SignalFilter(after: $page->nextCursor, status: 'active', severity: 'high'));
+}
+$detectors = $signals->detectors();
+$connections = $signals->connections();
+```
+
+`SignalPage` contains at most 50 `SignalRecord` values and an opaque nullable
+cursor. Preserve the same filters when following it. Pagination is explicit, so a
+caller controls its own work/deadline. `SignalDetail` reports `historyLimit` (100),
+revision history and delivery metadata. It is not an unbounded audit export.
+Metric findings have `mappingVersion=0` because no event mapping was applied.
+
+`DetectorState` retains per-quality counts, entity count and nullable data time.
+`ConnectionState` reports actual imports, budget, last attempt/success/event times,
+nullable error and pending operation. No checkpoint rows means no imported source
+history; an empty list does not imply that configured sources are healthy. Missing
+samples, degraded quality and expired signals must remain visible to consumers.
+Read methods never change payments, subscriptions, sessions or detector state.
+
+Test fakes expose `queueSignals`, `queueSignal`, `queueDetectors` and
+`queueConnections`, corresponding call logs, exception queues and exhaustion
+errors. `tests/ReadTest.php` verifies pagination, historical evidence, incomplete
+states, malformed responses and access refusal. The real SDK acceptance additionally
+reads persisted metric findings/details/status before replay and entity erasure.

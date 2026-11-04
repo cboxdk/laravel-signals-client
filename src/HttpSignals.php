@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Cbox\Signals;
 
 use Cbox\Signals\Contracts\Signals;
+use Cbox\Signals\Data\ConnectionState;
+use Cbox\Signals\Data\DetectorState;
 use Cbox\Signals\Data\Entity;
 use Cbox\Signals\Data\Erasure;
 use Cbox\Signals\Data\Evaluation;
@@ -16,6 +18,9 @@ use Cbox\Signals\Data\Operation;
 use Cbox\Signals\Data\Receipt;
 use Cbox\Signals\Data\ReplayRequest;
 use Cbox\Signals\Data\Signal;
+use Cbox\Signals\Data\SignalDetail;
+use Cbox\Signals\Data\SignalFilter;
+use Cbox\Signals\Data\SignalPage;
 use Cbox\Signals\Exceptions\SignalsFailure;
 use Cbox\Signals\Support\Wire;
 use Illuminate\Http\Client\ConnectionException;
@@ -24,6 +29,30 @@ use Illuminate\Http\Client\Factory;
 class HttpSignals implements Signals
 {
     public function __construct(private readonly Factory $http, private readonly string $url, private readonly string $token, private readonly float $timeout = 2) {}
+
+    public function signals(?SignalFilter $filter = null): SignalPage
+    {
+        return SignalPage::fromArray($this->request('GET', '/v1/signals', ($filter ?? new SignalFilter)->toArray()));
+    }
+
+    public function signal(string $id): SignalDetail
+    {
+        return SignalDetail::fromArray($this->request('GET', '/v1/signals/'.rawurlencode($id), []));
+    }
+
+    public function detectors(): array
+    {
+        $data = $this->request('GET', '/v1/detectors/status', []);
+
+        return array_map(static fn (mixed $item): DetectorState => DetectorState::fromArray(Wire::object($item)), Wire::items($data['data'] ?? null));
+    }
+
+    public function connections(): array
+    {
+        $data = $this->request('GET', '/v1/connections', []);
+
+        return array_map(static fn (mixed $item): ConnectionState => ConnectionState::fromArray(Wire::object($item)), Wire::items($data['data'] ?? null));
+    }
 
     public function events(EventBatch $batch, string $idempotencyKey): Receipt
     {
