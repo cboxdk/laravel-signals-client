@@ -82,11 +82,12 @@ it('reads typed completion and replay results without confusing them with accept
 
 it('requests erasure and polls pending history without claiming deletion is complete', function (): void {
     $http = new Factory;
-    $http->fakeSequence()->push(['id' => 'erase_1', 'status' => 'pending'], 202)->push(['id' => 'erase_1', 'status' => 'pending_history'])->push(['id' => 'erase_1', 'status' => 'completed']);
+    $http->fakeSequence()->push(['id' => 'erase_1', 'status' => 'pending'], 202)->push(['id' => 'erase_1', 'status' => 'pending_history'])->push(['id' => 'erase_1', 'status' => 'pending_configuration'])->push(['id' => 'erase_1', 'status' => 'completed']);
     $client = new HttpSignals($http, 'https://signals.test', 'key');
     $request = $client->erase(new Entity('shop', 'user', 'one'));
     expect($request->status)->toBe(ErasureState::Pending)
         ->and($client->erasure($request->id)->status)->toBe(ErasureState::PendingHistory)
+        ->and($client->erasure($request->id)->status)->toBe(ErasureState::PendingConfiguration)
         ->and($client->erasure($request->id)->status)->toBe(ErasureState::Completed);
     $http->assertSent(fn ($request) => $request->method() === 'POST' && $request->url() === 'https://signals.test/v1/erasures' && $request['subject']['namespace'] === 'shop');
     $fake = new FakeSignals;

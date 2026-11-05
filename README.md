@@ -145,8 +145,9 @@ billable events are rejected as malformed.
 
 `Signals::erase(new Entity(...))` requires a `manage` key. Retry the same entity to
 obtain the same request ID; use `Signals::erasure($id)` to follow `Pending`,
-`PendingHistory`, then `Completed`. Only `Completed` confirms removal from the
-operational and analytical stores. Usage/deduplication records survive, and the
+`PendingHistory`, and (when configuration acknowledgement is required)
+`PendingConfiguration`. Only `Completed` confirms that operational and analytical
+cleanup and all required configuration acknowledgements have finished. Usage/deduplication records survive, and the
 entity tombstone refuses new ingestion. This API does not delete a whole project
 or retroactively remove encrypted backup copies; follow the service's recovery
 and retention procedure for those.
@@ -202,3 +203,7 @@ cleanup watermarks. `pending_history` means ClickHouse cleanup is not yet confir
 a configured number of retention days alone is not evidence of completed cleanup.
 Read access is required. The test fake requires `queueRetention($state)` or an
 explicit exception; it never supplies a fabricated ready state.
+
+Signal detail exposes the latest retained normalized activity for its subject as
+`$detail->recentObservations`. Each entry carries the source, event ID, type and
+event time. Use the signal's own evidence for its historical decision.

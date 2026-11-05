@@ -989,6 +989,35 @@
         },
         "history_limit": {
           "const": 100
+        },
+        "recent_observations": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string"
+              },
+              "event_id": {
+                "type": "string"
+              },
+              "occurred_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "observation_type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source",
+              "event_id",
+              "occurred_at",
+              "observation_type"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [
@@ -1306,6 +1335,7 @@
           "enum": [
             "pending",
             "pending_history",
+            "pending_configuration",
             "completed"
           ]
         }

@@ -14,11 +14,12 @@ function persistedSignal(): array
 
 it('reads persisted signals with explicit filters cursor and bounded detail history', function (): void {
     $http = new Factory;
-    $http->fakeSequence()->push(['data' => [persistedSignal()], 'next_cursor' => 'sig_1'])->push([...persistedSignal(), 'revisions' => [['revision' => 4, 'occurred_at' => '2026-11-04T10:20:00Z', 'status' => 'expired']], 'deliveries' => [['id' => 'delivery', 'destination_id' => 'webhook', 'revision' => 4, 'status' => 'pending', 'attempts' => 0, 'last_status' => null, 'next_attempt' => '2026-11-04T10:20:00Z']], 'history_limit' => 100])->push(['data' => [], 'next_cursor' => null]);
+    $http->fakeSequence()->push(['data' => [persistedSignal()], 'next_cursor' => 'sig_1'])->push([...persistedSignal(), 'revisions' => [['revision' => 4, 'occurred_at' => '2026-11-04T10:20:00Z', 'status' => 'expired']], 'deliveries' => [['id' => 'delivery', 'destination_id' => 'webhook', 'revision' => 4, 'status' => 'pending', 'attempts' => 0, 'last_status' => null, 'next_attempt' => '2026-11-04T10:20:00Z']], 'history_limit' => 100, 'recent_observations' => [['source' => 'shop', 'event_id' => 'checked', 'observation_type' => 'access.attempt', 'occurred_at' => '2026-11-04T10:20:00Z']]])->push(['data' => [], 'next_cursor' => null]);
     $client = new HttpSignals($http, 'https://signals.test', 'read-key');
     $page = $client->signals(new SignalFilter(severity: 'medium', status: 'expired', entity: 'one'));
     expect($page->nextCursor)->toBe('sig_1')->and($page->data[0]->mappingVersion)->toBe(0)->and($page->data[0]->evidence[0]->value)->toBe(150.0);
     $detail = $client->signal('sig_1');
+    expect($detail->recentObservations[0]->eventId)->toBe('checked');
     expect($detail->signal->revision)->toBe(4)->and($detail->revisions[0]->status)->toBe('expired')->and($detail->deliveries[0]->lastStatus)->toBeNull()->and($detail->historyLimit)->toBe(100);
     expect($client->signals(new SignalFilter(after: $page->nextCursor))->data)->toBe([]);
     $http->assertSent(fn ($request) => str_contains($request->url(), 'severity=medium') && $request->hasHeader('Authorization', 'Bearer read-key'));
