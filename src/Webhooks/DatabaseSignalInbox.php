@@ -43,7 +43,7 @@ class DatabaseSignalInbox implements SignalInbox
             $this->database->table('signals_inbox_state')->where($key)->update($values);
 
             return true;
-        });
+        }) === true;
     }
 
     public function active(string $project, string $environment): array

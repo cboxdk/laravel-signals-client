@@ -54,7 +54,7 @@ class DatabaseEventOutbox implements EventOutbox
             }
 
             return true;
-        });
+        }) === true;
     }
 
     private function batch(string $body): EventBatch
