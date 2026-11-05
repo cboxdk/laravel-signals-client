@@ -2168,6 +2168,16 @@
             "maxLength": 190
           },
           "maxItems": 1000
+        },
+        "service_grant_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,190}$",
+          "description": "Organization-owned Cbox ID service grant. Requires import_from; credentials remain in the encrypted secret reference."
+        },
+        "provider_environment": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,190}$",
+          "description": "Required for Billing service grants; exact production environment key returned by the provider."
         }
       },
       "required": [
