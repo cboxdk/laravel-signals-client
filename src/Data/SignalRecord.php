@@ -30,7 +30,7 @@ readonly class SignalRecord
 
         return new self(
             Wire::text($data['id'] ?? null), Wire::text($data['project'] ?? null), Wire::text($data['environment'] ?? null),
-            new Entity(Wire::text($entity['namespace'] ?? null), Wire::text($entity['type'] ?? null), Wire::text($entity['id'] ?? null)),
+            new Entity(Wire::text($entity['namespace'] ?? null), Wire::text($entity['type'] ?? null), Wire::text($entity['id'] ?? null), isset($entity['tenant_id']) ? Wire::text($entity['tenant_id']) : ''),
             Wire::text($data['detector_id'] ?? null), Wire::integer($data['detector_version'] ?? null, 1),
             Wire::integer($data['mapping_version'] ?? null), Wire::integer($data['configuration_revision'] ?? null, 1),
             Wire::text($data['type'] ?? null), Wire::text($data['severity'] ?? null), Wire::strings($data['reasons'] ?? null),

@@ -36,3 +36,8 @@ it('serializes public DTOs according to the shared wire contract', function (): 
         expect((new Validator)->validate($wire, $schema)->isValid())->toBeTrue($name);
     }
 });
+
+it('retains downstream tenant identity without changing legacy entity payloads', function (): void {
+    expect((new Entity('storefront', 'user', 'same'))->toArray())->toBe(['namespace' => 'storefront', 'type' => 'user', 'id' => 'same']);
+    expect((new Entity('storefront', 'user', 'same', 'one'))->toArray())->toBe(['tenant_id' => 'one', 'namespace' => 'storefront', 'type' => 'user', 'id' => 'same']);
+});
