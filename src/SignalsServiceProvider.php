@@ -5,10 +5,16 @@ declare(strict_types=1);
 namespace Cbox\Signals;
 
 use Cbox\Signals\Console\DispatchEvents;
+use Cbox\Signals\Console\ReconcileManaged;
 use Cbox\Signals\Contracts\CountIntervals;
 use Cbox\Signals\Contracts\EventOutbox;
+use Cbox\Signals\Contracts\ManagedCredential;
+use Cbox\Signals\Contracts\ManagedIntegration;
 use Cbox\Signals\Contracts\SignalInbox;
 use Cbox\Signals\Contracts\Signals;
+use Cbox\Signals\Managed\ConfiguredManagedCredential;
+use Cbox\Signals\Managed\HttpManagedIntegration;
+use Cbox\Signals\Support\JsonTransport;
 use Cbox\Signals\Webhooks\DatabaseSignalInbox;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\ServiceProvider;
@@ -22,12 +28,14 @@ class SignalsServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/signals.php', 'signals');
         $this->app->bind(CountIntervals::class, fn (): HttpCountIntervals => new HttpCountIntervals($this->app->make(Factory::class), config()->string('signals.url', ''), config()->string('signals.token', ''), config()->float('signals.timeout', 2.0)));
         $this->app->bind(Signals::class, fn (): HttpSignals => new HttpSignals($this->app->make(Factory::class), config()->string('signals.url', ''), config()->string('signals.token', ''), config()->float('signals.timeout', 2.0)));
+        $this->app->bindIf(ManagedCredential::class, fn (): ConfiguredManagedCredential => new ConfiguredManagedCredential(config()->string('signals.managed.token', '') !== '' ? config()->string('signals.managed.token', '') : config()->string('signals.token', '')));
+        $this->app->bind(ManagedIntegration::class, fn (): HttpManagedIntegration => new HttpManagedIntegration(new JsonTransport($this->app->make(Factory::class), config()->string('signals.url', ''), config()->float('signals.timeout', 2.0)), $this->app->make(ManagedCredential::class)));
     }
 
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
-            $this->commands([DispatchEvents::class]);
+            $this->commands([DispatchEvents::class, ReconcileManaged::class]);
         }
         $this->publishesMigrations([__DIR__.'/../database/migrations' => database_path('migrations')], 'signals-migrations');
         $this->publishes([__DIR__.'/../config/signals.php' => config_path('signals.php')], 'signals-config');
