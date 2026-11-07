@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cbox\Signals;
 
 use Cbox\Signals\Console\DispatchEvents;
+use Cbox\Signals\Contracts\CountIntervals;
 use Cbox\Signals\Contracts\EventOutbox;
 use Cbox\Signals\Contracts\SignalInbox;
 use Cbox\Signals\Contracts\Signals;
@@ -19,6 +20,7 @@ class SignalsServiceProvider extends ServiceProvider
         $this->app->bind(EventOutbox::class, fn () => new DatabaseEventOutbox($this->app->make('db')->connection(), $this->app->make(Signals::class)));
         $this->app->bind(SignalInbox::class, fn () => new DatabaseSignalInbox($this->app->make('db')->connection()));
         $this->mergeConfigFrom(__DIR__.'/../config/signals.php', 'signals');
+        $this->app->bind(CountIntervals::class, fn (): HttpCountIntervals => new HttpCountIntervals($this->app->make(Factory::class), config()->string('signals.url', ''), config()->string('signals.token', ''), config()->float('signals.timeout', 2.0)));
         $this->app->bind(Signals::class, fn (): HttpSignals => new HttpSignals($this->app->make(Factory::class), config()->string('signals.url', ''), config()->string('signals.token', ''), config()->float('signals.timeout', 2.0)));
     }
 

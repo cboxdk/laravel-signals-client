@@ -207,3 +207,76 @@ explicit exception; it never supplies a fabricated ready state.
 Signal detail exposes the latest retained normalized activity for its subject as
 `$detail->recentObservations`. Each entry carries the source, event ID, type and
 event time. Use the signal's own evidence for its historical decision.
+
+### Closed count intervals and historical revisions
+
+`Cbox\Signals\Contracts\CountIntervals` sends and reads registered count series
+through the public API. It uses the existing `signals.url`, `signals.token` and
+timeout configuration. It is separate from `Signals`; existing consumers and
+test fakes keep their existing contract. The service control plane must first
+authorize the source, interval retention and immutable series definition. A
+public client cannot create that authorization.
+
+An interval contains a closed source observation, not a running total or a
+forecast. Persist the exact `CountInterval::toArray()` representation before the
+first send; retry that same revision after an uncertain response. All timestamps
+are explicit UTC strings, preserving source nanoseconds. Counts are decimal
+strings through `18446744073709551615`, never PHP floats or signed integers.
+Coverage is required: observed zero is `'0'`; unknown is `null` with an `unknown`
+coverage reason. A partial count retains `partial` coverage.
+
+```php
+use Cbox\Signals\Contracts\CountIntervals;
+use Cbox\Signals\Data\CountInterval;
+use Cbox\Signals\Data\IntervalHistoryQuery;
+use Cbox\Signals\Data\IntervalSeries;
+
+$intervals = app(CountIntervals::class);
+$series = new IntervalSeries('api', 'requests', 1);
+$record = CountInterval::fromArray($persistedSourceInterval);
+$receipt = $intervals->ingest($series, [$record]);
+
+$page = $intervals->history($series, new IntervalHistoryQuery($from, $through));
+if ($page->nextCursor !== null) {
+    $next = $intervals->history($series, new IntervalHistoryQuery(
+        $from, $through, $page->asOf, $page->nextCursor,
+    ));
+}
+```
+
+Each record carries explicit project/environment/tenant scope, an opaque entity,
+registered dimensions and privacy subjects. Include the owners whose erasure
+must remove an aggregate; dropping a former owner from a correction cannot
+revive erased history. IP, session and device identities are not interval keys.
+Use internal key identifiers, never bearer tokens or payment credentials.
+
+A correction uses the next revision and the prior acknowledgement's `hash` as
+`previous_hash`; it cannot overwrite its predecessor. `knownAt` is the server's
+actual observation time. Preserve a page's `asOf` while following its cursor or
+repeating a historical query, so later imports/corrections cannot leak into an
+earlier backtest. Current retention and privacy rules still apply to that query.
+Missing buckets remain absent; this client never fills them with zero.
+
+Ingest allows 1–1,000 records, 16 KiB each and one MiB per request. History pages
+contain at most 1,000 records and have a bounded streamed response. Pagination and
+retry are explicit. `SignalsFailure` preserves recognized error codes and HTTP
+status without leaking response details. In particular, HTTP 410 means retired
+history; it is not a successful duplicate and must not be retried as a new event.
+The client provides transport and typed history; it does not train a model,
+certify source coverage or perform a forecast.
+
+The real acceptance test runs this PHP client against the selected engine's
+actual HTTP handler and PostgreSQL store. Set `SIGNALS_TEST_DATABASE_URL` privately
+to a disposable loopback PostgreSQL instance, then run:
+
+```sh
+python3 bin/test-count-intervals.py \
+  --engine /absolute/path/to/signalsd \
+  --output /private/interval-acceptance.json
+```
+
+The runner creates and removes its own schema. It checks exact counts and source
+timestamps, duplicates, corrections, historical pagination, foreign credentials,
+unknown/partial coverage, entity erasure and preserved project usage totals.
+It uses synthetic data and isolated allowances; it is not production data or
+model-quality evidence. Existing receipts are never overwritten.
