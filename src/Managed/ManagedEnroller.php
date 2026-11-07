@@ -77,7 +77,12 @@ final readonly class ManagedEnroller
     private function install(string $provider, ManagedEnvironment $environment): void
     {
         $secret = $this->sources->issueSecret($environment);
-        $this->signals->enroll($provider, $environment, $secret->plaintext);
+        try {
+            $this->signals->enroll($provider, $environment, $secret->plaintext);
+        } catch (SignalsFailure $failure) {
+            $this->sources->discardSecret($environment, $secret->reference);
+            throw $failure;
+        }
         $this->sources->retireSecrets($environment, $secret->reference);
     }
 }

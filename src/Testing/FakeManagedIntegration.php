@@ -29,9 +29,14 @@ class FakeManagedIntegration implements ManagedIntegration
 
     private ?Throwable $failure = null;
 
-    public function failWith(?Throwable $failure): self
+    /** @var list<string> */
+    private array $failing = [];
+
+    /** @param  list<string>  $methods  which of `enroll`, `enrollment`, `revoke` fail; all by default */
+    public function failWith(?Throwable $failure, array $methods = ['enroll', 'enrollment', 'revoke']): self
     {
         $this->failure = $failure;
+        $this->failing = $methods;
 
         return $this;
     }
@@ -39,7 +44,7 @@ class FakeManagedIntegration implements ManagedIntegration
     public function enroll(string $provider, ManagedEnvironment $environment, string $secret): ManagedEnrollment
     {
         $this->enrollCalls[] = ['provider' => $provider, 'owner_id' => $environment->ownerId, 'secret_length' => strlen($secret)];
-        $this->raise();
+        $this->raise('enroll');
         $key = $provider.'/'.$environment->ownerId;
         $now = new DateTimeImmutable;
         $current = $this->enrollments[$key] ?? null;
@@ -51,7 +56,7 @@ class FakeManagedIntegration implements ManagedIntegration
 
     public function enrollment(string $provider, string $ownerId): ?ManagedEnrollment
     {
-        $this->raise();
+        $this->raise('enrollment');
 
         return $this->enrollments[$provider.'/'.$ownerId] ?? null;
     }
@@ -59,7 +64,7 @@ class FakeManagedIntegration implements ManagedIntegration
     public function revoke(string $provider, string $ownerId): void
     {
         $this->revokeCalls[] = ['provider' => $provider, 'owner_id' => $ownerId];
-        $this->raise();
+        $this->raise('revoke');
         $key = $provider.'/'.$ownerId;
         $current = $this->enrollments[$key] ?? null;
         if ($current !== null) {
@@ -68,9 +73,9 @@ class FakeManagedIntegration implements ManagedIntegration
         }
     }
 
-    private function raise(): void
+    private function raise(string $method): void
     {
-        if ($this->failure !== null) {
+        if ($this->failure !== null && in_array($method, $this->failing, true)) {
             throw $this->failure;
         }
     }

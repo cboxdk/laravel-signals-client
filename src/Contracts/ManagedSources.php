@@ -31,4 +31,10 @@ interface ManagedSources
      * except the one referenced. Called after Signals has accepted the new one.
      */
     public function retireSecrets(ManagedEnvironment $environment, string $keepReference): void;
+
+    /**
+     * Retire one secret Signals never accepted (the enrolment failed after it
+     * was issued). Existing secrets stay valid.
+     */
+    public function discardSecret(ManagedEnvironment $environment, string $reference): void;
 }

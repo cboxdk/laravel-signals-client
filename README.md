@@ -301,6 +301,7 @@ final class IdManagedSources implements \Cbox\Signals\Contracts\ManagedSources
     public function retired(): iterable { /* owner ids of deleted environments */ }
     public function issueSecret(ManagedEnvironment $environment): IssuedSecret { /* export-scoped read key */ }
     public function retireSecrets(ManagedEnvironment $environment, string $keepReference): void { /* revoke the rest */ }
+    public function discardSecret(ManagedEnvironment $environment, string $reference): void { /* revoke one Signals never accepted */ }
 }
 
 $this->app->bind(ManagedSources::class, IdManagedSources::class);
@@ -312,8 +313,8 @@ Then schedule `signals:managed-reconcile` (hourly is plenty) and call
 you want Signals to follow within seconds. The reconcile leaves matching
 enrolments untouched, so a run without changes makes no writes; pass
 `--rotate=<owner>` to replace a secret. Secrets are issued only when Signals is
-about to receive them and the previous ones are retired only after Signals
-accepted the replacement. `FakeManagedIntegration` carries the same rules for
+about to receive them, the previous ones are retired only after Signals
+accepted the replacement, and a secret Signals refused is discarded at once. `FakeManagedIntegration` carries the same rules for
 application tests.
 
 `SIGNALS_MANAGED_TOKEN` (falling back to `SIGNALS_TOKEN`) is only the default

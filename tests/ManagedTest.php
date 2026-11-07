@@ -69,6 +69,14 @@ final class RecordingSources implements ManagedSources
     {
         $this->retirements[] = ['owner' => $environment->ownerId, 'keep' => $keepReference];
     }
+
+    /** @var list<array{owner:string,reference:string}> */
+    public array $discards = [];
+
+    public function discardSecret(ManagedEnvironment $environment, string $reference): void
+    {
+        $this->discards[] = ['owner' => $environment->ownerId, 'reference' => $reference];
+    }
 }
 
 it('enrols with the machine credential and transports the secret exactly once', function (): void {
@@ -154,13 +162,20 @@ it('reconciles idempotently: enrols missing, leaves matching alone, rotates on r
     expect($fifth->rotated)->toBe(['env_1'])->and($signals->enrollments['cbox_id/env_1']->url)->toBe('https://id.test/other');
 });
 
-it('isolates failures per environment and never retires secrets Signals did not accept', function (): void {
-    $signals = (new FakeManagedIntegration)->failWith(new SignalsFailure('unavailable', 503));
+it('isolates failures per environment, discards the unaccepted secret and keeps the old ones', function (): void {
+    $signals = (new FakeManagedIntegration)->failWith(new SignalsFailure('organization_unknown', 404), ['enroll', 'revoke']);
     $sources = new RecordingSources;
     $sources->environments = [managedEnvironment('env_1')];
     $sources->retired = ['env_0'];
     $result = (new ManagedEnroller($signals, $sources))->reconcile();
-    expect($result->failed)->toBe(['env_1' => 'unavailable', 'env_0' => 'unavailable'])->and($result->clean())->toBeFalse()->and($sources->retirements)->toBe([]);
+    expect($result->failed)->toBe(['env_1' => 'organization_unknown', 'env_0' => 'organization_unknown'])->and($result->clean())->toBeFalse()->and($sources->retirements)->toBe([])
+        ->and($sources->discards)->toBe([['owner' => 'env_1', 'reference' => 'key-1']]);
+
+    $signals = (new FakeManagedIntegration)->failWith(new SignalsFailure('unavailable', 503), ['enrollment']);
+    $sources = new RecordingSources;
+    $sources->environments = [managedEnvironment('env_1')];
+    $result = (new ManagedEnroller($signals, $sources))->reconcile();
+    expect($result->failed)->toBe(['env_1' => 'unavailable'])->and($sources->issued)->toBe(0);
 });
 
 it('matches the shared managed enrolment wire contract in both directions', function (): void {
