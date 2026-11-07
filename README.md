@@ -280,3 +280,42 @@ timestamps, duplicates, corrections, historical pagination, foreign credentials,
 unknown/partial coverage, entity erasure and preserved project usage totals.
 It uses synthetic data and isolated allowances; it is not production data or
 model-quality evidence. Existing receipts are never overwritten.
+
+## Bundled managed integration (first-party source apps)
+
+Cbox ID, Cbox Billing and Stache do not configure Signals by hand. Each
+application enrols its own environments in a *managed* integration: Signals
+finds or creates the organization's project, stores the read secret encrypted
+and registers the catalog's default shadow pipelines. Enrolment is idempotent,
+a new secret is a rotation, and revoking stops pulling within one worker
+interval. Customers upgrade to custom pipelines in Signals on top of the same
+sources; the bundled level is never enforcement.
+
+The application contributes one class and a credential:
+
+```php
+final class IdManagedSources implements \Cbox\Signals\Contracts\ManagedSources
+{
+    public function provider(): string { return 'cbox_id'; }
+    public function environments(): iterable { /* live environments → ManagedEnvironment */ }
+    public function retired(): iterable { /* owner ids of deleted environments */ }
+    public function issueSecret(ManagedEnvironment $environment): IssuedSecret { /* export-scoped read key */ }
+    public function retireSecrets(ManagedEnvironment $environment, string $keepReference): void { /* revoke the rest */ }
+    public function discardSecret(ManagedEnvironment $environment, string $reference): void { /* revoke one Signals never accepted */ }
+}
+
+$this->app->bind(ManagedSources::class, IdManagedSources::class);
+$this->app->bind(ManagedCredential::class, fn () => new MachineTokenCredential(...)); // Cbox ID client-credentials token
+```
+
+Then schedule `signals:managed-reconcile` (hourly is plenty) and call
+`ManagedEnroller::enroll()` / `revoke()` from environment lifecycle hooks when
+you want Signals to follow within seconds. The reconcile leaves matching
+enrolments untouched, so a run without changes makes no writes; pass
+`--rotate=<owner>` to replace a secret. Secrets are issued only when Signals is
+about to receive them, the previous ones are retired only after Signals
+accepted the replacement, and a secret Signals refused is discarded at once. `FakeManagedIntegration` carries the same rules for
+application tests.
+
+`SIGNALS_MANAGED_TOKEN` (falling back to `SIGNALS_TOKEN`) is only the default
+credential; bind your own `ManagedCredential` to use a Cbox ID machine token.
