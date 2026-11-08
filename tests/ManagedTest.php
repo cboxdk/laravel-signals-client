@@ -14,7 +14,7 @@ use Cbox\Signals\Testing\FakeManagedIntegration;
 use Illuminate\Http\Client\Factory;
 use Opis\JsonSchema\Validator;
 
-function enrollmentWire(string $owner, string $status = 'enrolled', string $url = 'https://id.test/api/v1/signals/source'): array
+function enrollmentWire(string $owner, string $status = 'enrolled', string $url = 'https://id.test'): array
 {
     return ['provider' => 'cbox_id', 'owner_id' => $owner, 'source' => 'managed-id-'.$owner, 'url' => $url, 'catalog_version' => 1, 'status' => $status,
         'import_from' => '2026-11-01T00:00:00Z', 'enrolled_at' => '2026-11-07T12:00:00Z', 'updated_at' => '2026-11-07T12:00:00Z', 'pipelines_generation' => '', 'error_code' => ''];
@@ -22,7 +22,7 @@ function enrollmentWire(string $owner, string $status = 'enrolled', string $url 
 
 function managedEnvironment(string $owner = 'env_1'): ManagedEnvironment
 {
-    return new ManagedEnvironment($owner, 'org_1', 'https://id.test/api/v1/signals/source', new DateTimeImmutable('2026-11-01T00:00:00Z'));
+    return new ManagedEnvironment($owner, 'org_1', 'https://id.test', new DateTimeImmutable('2026-11-01T00:00:00Z'));
 }
 
 function httpManaged(Factory $http, string $token = 'machine-token'): HttpManagedIntegration
@@ -87,7 +87,7 @@ it('enrols with the machine credential and transports the secret exactly once', 
     $http->assertSent(fn ($request) => $request->method() === 'PUT'
         && $request->url() === 'https://signals.test/v1/managed-integrations/cbox_id/enrollments/env_1'
         && $request->hasHeader('Authorization', 'Bearer machine-token')
-        && $request['secret'] === 'plain-secret' && $request['organization'] === 'org_1' && $request['url'] === 'https://id.test/api/v1/signals/source'
+        && $request['secret'] === 'plain-secret' && $request['organization'] === 'org_1' && $request['url'] === 'https://id.test'
         && $request['import_from'] === '2026-11-01T00:00:00.000+00:00');
     $http->assertSentCount(1);
 });
