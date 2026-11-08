@@ -15,7 +15,7 @@ final readonly class ManagedEnvironment
         public string $ownerId,
         /** Cbox ID organization id that owns the environment. */
         public string $organization,
-        /** Absolute URL of the environment's Signals source feed. */
+        /** The environment's source origin (scheme and host only); Signals appends the pull path. */
         public string $url,
         /** Earliest occurrence Signals may import. */
         public DateTimeImmutable $importFrom,

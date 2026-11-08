@@ -3238,8 +3238,9 @@
         "url": {
           "type": "string",
           "format": "uri",
-          "pattern": "^https://",
-          "maxLength": 2048
+          "pattern": "^https://[^/?#]+$",
+          "maxLength": 2048,
+          "description": "The source origin (scheme and host only); the engine appends /api/v1/signals/source itself."
         },
         "secret": {
           "type": "string",
