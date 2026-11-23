@@ -2,12 +2,11 @@
 
 Typed event, metric, login-evaluation and replay transport for Cbox Signals, plus a
 transactional event outbox and a signature-verified signal inbox. PHP 8.4+ and
-Laravel 12/13. This package is under implementation and has not been released.
-Use the reviewed source checkout until a release is separately authorized.
+Laravel 12/13.
 
 ## Configure
 
-Install the package through Composer's path repository for local development.
+Install the package with `composer require cboxdk/laravel-signals-client`.
 Laravel discovers `SignalsServiceProvider`. Publish its configuration and migrations:
 
 ```sh

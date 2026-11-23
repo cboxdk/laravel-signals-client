@@ -9,7 +9,8 @@
         "illuminate/http": "^12.0 || ^13.0",
         "illuminate/support": "^12.0 || ^13.0",
         "cboxdk/laravel-webhook-signature": "^0.1",
-        "illuminate/database": "^12.0 || ^13.0"
+        "illuminate/database": "^12.0 || ^13.0",
+        "illuminate/redis": "^12.0 || ^13.0"
     },
     "require-dev": {
         "orchestra/testbench": "^10.0 || ^11.0",

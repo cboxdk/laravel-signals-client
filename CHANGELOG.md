@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 - 2026-11-23
+
+First release.
+
 
 - Add the `CountApiActivity` middleware: API calls are counted per actor in Redis after the response (never in the database) and sent by `signals:api-activity` as closed `api.activity` windows (contract 2.6.0) to the canonical v2 source intake, with an `ApiActorResolver` extension point, keyed pseudonyms for IP addresses and path parameters, and the `FakeApiActivity` test double.
 - Add a separate typed count-interval client with exact uint64 strings, explicit coverage and privacy dependencies, immutable corrections and historical pagination. Public callers cannot grant themselves interval retention or register series.
