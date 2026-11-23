@@ -9,12 +9,20 @@ jobs:
   locked:
     name: Locked dependency and SBOM gate
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # API activity is counted in Redis; these tests run real concurrent writers and flushers.
+      SIGNALS_TEST_REDIS: redis://127.0.0.1:6379/15
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.5'
-          extensions: pdo_sqlite
+          extensions: pdo_sqlite, redis
           coverage: none
       - run: composer install --prefer-dist --no-interaction --no-progress
       - run: composer qa

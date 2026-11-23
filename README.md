@@ -102,6 +102,110 @@ Rotate signing keys with an overlap: configure old+new keys at the receiver, swi
 the sender, verify delivery with the new key, then remove the old key. After removal,
 old-key signatures fail. Never put signing secrets in logs or queue metadata.
 
+## API activity windows
+
+`Cbox\Signals\ApiActivity\CountApiActivity` counts an application's API calls per
+actor and sends them as closed `api.activity` windows (contract 2.6.0). Add it to the
+API middleware group and schedule the sender every minute:
+
+```php
+// bootstrap/app.php
+$middleware->appendToGroup('api', \Cbox\Signals\ApiActivity\CountApiActivity::class);
+// routes/console.php
+Schedule::command('signals:api-activity')->everyMinute()->withoutOverlapping();
+```
+
+Configure `signals.api_activity` (see `config/signals.php`). Counting needs
+`SIGNALS_API_ACTIVITY=true`, `SIGNALS_REFERENCE_KEY` with its id, the application id and
+the entity namespace; sending also needs the project, environment, source and generation
+of an explicit v2 source grant for the `api.activity` family, and a `SIGNALS_TOKEN` with
+write access to it. Records go to `POST /v2/sources/{source}/records:batch`.
+
+A request never waits on Signals. `handle` only notes the start time; the call is counted
+in `terminate`, after the response has been sent, by one Lua script call to Redis (or
+Valkey) that adds it to that window's counters. The application database is never
+touched. Counting failures, such as Redis being down, are reported at most once a minute
+per process and never thrown; the calls of that time are not counted. Only requests that matched a
+route are counted, by their route template (`/v1/incidents/{incident}`), never the path.
+
+What leaves the application: the user, organization and token as entities with their
+internal ids (a token's database id, never its secret); the client IP and the
+path-parameter values only as 24-character HMAC-SHA256 pseudonyms under
+`SIGNALS_REFERENCE_KEY`, named by `reference_key_id`. Rotate the key with a new id.
+
+Who the actor is comes from `Contracts\ApiActorResolver`. The default takes the
+authenticated user, the key of its Sanctum `currentAccessToken()` or Passport `token()`
+model, and `$request->ip()`. Bind your own to add the organization, device or network
+context:
+
+```php
+$this->app->bind(ApiActorResolver::class, fn () => new class implements ApiActorResolver {
+    public function resolve(Request $request): ApiActor
+    {
+        $user = $request->user();
+
+        return new ApiActor(
+            user: $user ? (string) $user->getKey() : null,
+            organization: $user?->organization_id !== null ? (string) $user->organization_id : null,
+            token: $user?->currentAccessToken()?->getKey() !== null ? (string) $user->currentAccessToken()->getKey() : null,
+            ip: $request->ip(),
+        );
+    }
+});
+```
+
+### Several servers, and a server that dies
+
+Every application server and worker counts into the same Redis (`SIGNALS_API_REDIS`
+names the connection; use a dedicated one with a short `read_timeout`). The counters are
+aggregates, so Redis memory follows actors, operations and references, never requests.
+Each window is split into `shards` key spaces by actor, each under one hash tag, so a
+Redis Cluster keeps each shard on one node.
+
+Each shard counts into a numbered part. `signals:api-activity` seals a part `grace`
+seconds (default 120) after its window ends, in one atomic script, after which calls go to
+the next part; so a call lands in exactly one part. The command reads the sealed part,
+builds the records, reserves their source positions once, sends them, and only then
+deletes the part's keys. A retry rebuilds the same records with the same ids, positions
+and `recorded_at`, so Signals counts them once. Two schedulers running at once take turns
+on a lock. A call counted after its window was sealed (a slow request, a server that
+comes back) becomes a later part with its own record ids; Signals adds their counts and
+unites their references, so keep late records rare (each accepted record is one billed
+event). A server that dies loses only the calls it had not yet counted, and never causes
+a call to be counted twice. A page that Signals refuses is resent record by record; a
+refused record is kept in the Redis list `signals:api:failed` (newest 1000).
+
+### Limits
+
+Per window: the 500 busiest actors (`max_actors`) get a window each; other actors and
+calls with no user, organization, token, address or device are folded into `remainder`
+windows per network context. Beyond 16 networks the busiest 15 keep one each and the
+rest share one per enrichment version, which keeps only the context fields all of them
+share (`network_class: unknown` and nulls across networks). The 32 busiest operations are listed and
+the rest counted in `omitted_requests`. Each operation keeps the 256 smallest parameter
+references (the same objects on every server), the window keeps at most 768 shared
+across its operations, and every answered request whose set was not kept counts in
+`overflow`. The order of calls is a prefix: 256 runs at most, ending just before the first
+call to an operation that is not listed.
+
+Redis bounds per window and shard: `tracked_actors / shards` actors (default 2000 over
+8 shards) are counted one by one and later ones per network (64, then one per enrichment
+version, with HyperLogLog actor counts); 32 operations per actor; the 256 smallest
+references per operation and 768 per actor; the first 1024 calls per actor for the order.
+
+`tests/ApiActivityRedisTest.php` proves exactly-once counting with concurrent writers and
+flushers, the retry, and the memory bound under 20000 addresses; set
+`SIGNALS_TEST_REDIS=redis://host:6379/15` to run it (CI does; the database is flushed).
+
+### Testing
+
+```php
+$fake = FakeApiActivity::swap($this->app);
+$this->getJson('/v1/incidents/42');
+$fake->assertSent(fn (array $window) => $window['operations'][0]['route'] === '/v1/incidents/{incident}');
+$fake->records(); // the complete 2.6.0 records Signals would receive
+```
+
 ## Contracts and verification
 
 Canonical wire schemas and OpenAPI live in `cboxdk/signalsd/contracts`.
