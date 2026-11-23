@@ -1,0 +1,68 @@
+{
+  "contract_version": "2.6.0",
+  "id": "api-window-remainder-example",
+  "scope": {
+    "project_id": "project-example",
+    "environment_id": "production",
+    "audience": "environment"
+  },
+  "position": {
+    "source_id": "source-example",
+    "partition": "0",
+    "generation": "generation-1",
+    "sequence": "13"
+  },
+  "occurred_at": "2026-11-05T10:10:00Z",
+  "recorded_at": "2026-11-05T10:10:05Z",
+  "kind": "event",
+  "name": "api.activity",
+  "data": {
+    "window_start": "2026-11-05T10:00:00Z",
+    "window_end": "2026-11-05T10:10:00Z",
+    "application_id": "example-api",
+    "grouping": "remainder",
+    "actors": 340,
+    "subject": null,
+    "organization": null,
+    "token": null,
+    "context": {
+      "device_id": null,
+      "device_evidence": "missing",
+      "ip": null,
+      "country": null,
+      "asn": 64501,
+      "browser_family": null,
+      "browser_major": null,
+      "os_family": null,
+      "network_class": "hosting",
+      "geo_accuracy_km": null,
+      "latitude": null,
+      "longitude": null,
+      "enrichment_version": "example-1"
+    },
+    "ip_reference": null,
+    "reference_key_id": "reference-key-1",
+    "operations": [
+      {
+        "method": "GET",
+        "route": "/v1/incidents/{incident}",
+        "responses": {
+          "success": 120,
+          "redirect": 0,
+          "client_error": 5100,
+          "server_error": 0,
+          "denied": 0,
+          "not_found": 4800,
+          "rate_limited": 300
+        },
+        "parameters": {
+          "references": [],
+          "overflow": 120,
+          "conflicts": 0
+        }
+      }
+    ],
+    "omitted_requests": 0,
+    "sequence": []
+  }
+}
