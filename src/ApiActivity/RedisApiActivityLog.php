@@ -7,6 +7,7 @@ namespace Cbox\Signals\ApiActivity;
 use Cbox\Signals\Contracts\ApiActivityLog;
 use Cbox\Signals\Contracts\SourceRecords;
 use Cbox\Signals\Exceptions\SignalsFailure;
+use Cbox\Signals\Support\Wire;
 use Illuminate\Contracts\Redis\Factory;
 use Illuminate\Redis\Connections\PhpRedisConnection;
 use UnexpectedValueException;
@@ -208,25 +209,186 @@ LUA;
 
     /**
      * Seal the windows that ended at least the grace period before `$now`, and the
-     * later parts of windows inside the lookback, then send what is sealed in order.
+     * later parts of windows inside the lookback, send what is sealed in order, and
+     * then send a coverage frame (see `cover`).
      *
-     * @return array{parts:int,records:int} parts finished and records Signals accepted
+     * @return array{parts:int,records:int,coverage:?string} parts finished, records Signals accepted,
+     *                                                       and the frame's completeness (null when no frame was sent)
      */
     public function flush(SourceRecords $source, int $now): array
     {
         $this->settings->sendable();
+        $began = time();
         $lock = $this->settings->prefix.':lock';
         $token = bin2hex(random_bytes(16));
         if ($this->raw(['SET', $lock, $token, 'NX', 'EX', '300']) === false || $this->raw(['GET', $lock]) !== $token) {
-            return ['parts' => 0, 'records' => 0];
+            return ['parts' => 0, 'records' => 0, 'coverage' => null];
         }
         try {
             $this->discover($now);
+            $result = $this->sendPending($source, $now);
 
-            return $this->sendPending($source, $now);
+            return [
+                'parts' => $result['parts'],
+                'records' => $result['records'],
+                'coverage' => $this->cover($source, $now, $now + max(0, time() - $began), $result['refused']),
+            ];
         } finally {
             $this->script(self::UNLOCK, [$lock], [$token]);
         }
+    }
+
+    /**
+     * Send one coverage frame: Signals has every record whose window ends by `through`.
+     *
+     * An `api.activity` record counts in the window it closes, so `through` stays a
+     * second short of the end of every window Signals has not accepted yet: the window
+     * still open or in its grace, and any sealed part still waiting to be sent. Once
+     * all of a window's parts are accepted, or it closed without calls, `through` moves
+     * on to now. It never moves backwards, so a failing send holds it and the source
+     * turns stale, as a dead sender does.
+     *
+     * A complete frame repeats its claim from the start of the lookback, so a window is
+     * complete again in the next frame after a late part was accepted. A late part that
+     * cannot be sent yet, or a record Signals refused, makes the frame partial from that
+     * window on; complete frames never again reach back over a window with a refused record.
+     *
+     * @param  array<int,int>  $refused  records Signals refused in this run, by window start
+     */
+    private function cover(SourceRecords $source, int $now, int $emitted, array $refused): ?string
+    {
+        $key = $this->coverageKey();
+        $state = self::pairs($this->raw(['HGETALL', $key]));
+        if ($emitted <= (int) ($state['emitted'] ?? 0)) {
+            return null; // another run already sent this second's frame
+        }
+        $seconds = $this->settings->window;
+        // Windows ending by $closed are sealed; the one after it may still be counting.
+        $closed = intdiv($now - $this->settings->grace, $seconds) * $seconds;
+        $candidate = min($now, $closed + $seconds - 1);
+        $previous = isset($state['through']) ? (int) $state['through'] : null;
+        $suspect = null;
+        $late = false;
+        $members = $this->raw(['ZRANGE', $this->settings->prefix.':pending', '0', '-1']);
+        foreach (is_array($members) ? $members : [] as $member) {
+            [$start, $length] = array_map(intval(...), explode(':', self::text($member)));
+            $candidate = min($candidate, $start + $length - 1);
+            if ($previous !== null && $start + $length <= $previous) {
+                $suspect = min($suspect ?? $start, $start); // a late part of a window already claimed
+                $late = true;
+            }
+        }
+        $floor = (int) ($state['floor'] ?? 0);
+        foreach (array_keys($refused) as $start) {
+            $suspect = min($suspect ?? $start, $start);
+            $floor = max($floor, $start + $seconds);
+        }
+        $through = max($previous ?? $candidate, $candidate);
+        $origin = (int) ($state['origin'] ?? $through);
+        [$commit, $exact] = $this->commit($state);
+
+        $reasons = [];
+        if ($late) {
+            $reasons[] = 'late_records_pending';
+        }
+        if ($refused !== []) {
+            $reasons[] = 'records_refused';
+        }
+        if (! $exact) {
+            $reasons[] = 'commit_unknown';
+        }
+        $from = $suspect !== null
+            ? max($origin, $suspect)
+            : max($origin, $floor, intdiv($now - $this->settings->lookback, $seconds) * $seconds);
+        $from = min($from, $through);
+        $completeness = $reasons === [] ? 'complete' : 'partial';
+        // Claimed before it is sent: a retry never claims less, nor reuses a second.
+        $this->raw(['HSET', $key, 'origin', (string) $origin, 'through', (string) $through, 'emitted', (string) $emitted, 'floor', (string) $floor]);
+        $this->raw(['EXPIRE', $key, (string) self::TTL]);
+        $iso = static fn (int $at): string => gmdate('Y-m-d\TH:i:s\Z', $at);
+        $frame = [
+            'contract_version' => '2.0.0',
+            'kind' => 'coverage',
+            'scope' => (array) $this->settings->scope,
+            'position' => ['source_id' => $this->settings->sourceId, 'partition' => $this->settings->partition, 'generation' => $this->settings->generation, 'sequence' => (string) $commit],
+            'emitted_at' => $iso($emitted),
+            'event_time' => [
+                'status' => $completeness,
+                'from' => $iso($from),
+                'through' => $iso($through),
+                'expected_cadence_seconds' => 60,
+                'lag_seconds' => $emitted - $through,
+                'reasons' => $reasons,
+            ],
+            'commit_through' => (string) $commit,
+            'expected_families' => ['api.activity'],
+            'observed_families' => ['api.activity'],
+            'omitted_records' => array_sum($refused),
+            'completeness' => $completeness,
+            'reason_codes' => $reasons,
+        ];
+        try {
+            $source->send($this->settings->sourceId, [$frame]);
+        } catch (SignalsFailure $failure) {
+            if (! in_array($failure->status, self::RETRY, true)) {
+                if ($failure->status === 422) {
+                    // Perhaps a commit position Signals does not have: claim none until a record is accepted.
+                    $this->raw(['HSET', $key, 'commit', '0', 'exact', '0']);
+                }
+                $failed = $this->settings->prefix.':failed';
+                $this->raw(['LPUSH', $failed, self::json(['error_code' => $failure->errorCode, 'record' => $frame])]);
+                $this->raw(['LTRIM', $failed, '0', '999']);
+            }
+
+            return null;
+        }
+
+        return $completeness;
+    }
+
+    /**
+     * The highest position Signals accepted, and whether it is known exactly. Before the
+     * first frame it is the last position reserved, when nothing reserved is still unsent.
+     *
+     * @param  array<string,string>  $state
+     * @return array{0:int,1:bool}
+     */
+    private function commit(array $state): array
+    {
+        if (isset($state['commit'])) {
+            return [(int) $state['commit'], ($state['exact'] ?? '0') === '1'];
+        }
+        $members = $this->raw(['ZRANGE', $this->settings->prefix.':pending', '0', '-1']);
+        foreach (is_array($members) ? $members : [] as $member) {
+            [$start, $seconds, $shard, $part] = array_map(intval(...), explode(':', self::text($member)));
+            if ($this->raw(['HEXISTS', $this->base($start, $seconds, $shard).':m', 'seq:'.$part]) === 1) {
+                return [0, false];
+            }
+        }
+        $reserved = $this->raw(['GET', $this->positions()]);
+        $commit = is_numeric($reserved) ? (int) $reserved : 0;
+        $this->raw(['HSET', $this->coverageKey(), 'commit', (string) $commit, 'exact', '1']);
+
+        return [$commit, true];
+    }
+
+    /** Note the highest position Signals accepted; it is then known exactly. */
+    private function accepted(int $sequence): void
+    {
+        $state = self::pairs($this->raw(['HGETALL', $this->coverageKey()]));
+        if (! isset($state['commit']) || ($state['exact'] ?? '0') !== '1' || (int) $state['commit'] < $sequence) {
+            $this->raw(['HSET', $this->coverageKey(), 'commit', (string) $sequence, 'exact', '1']);
+        }
+    }
+
+    private function coverageKey(): string
+    {
+        return $this->settings->prefix.':coverage:'.$this->settings->generation.':'.$this->settings->partition;
+    }
+
+    private function positions(): string
+    {
+        return $this->settings->prefix.':positions:'.$this->settings->generation.':'.$this->settings->partition;
     }
 
     /** Note every window part with calls that is ready to close. */
@@ -245,11 +407,11 @@ LUA;
         }
     }
 
-    /** @return array{parts:int,records:int} */
+    /** @return array{parts:int,records:int,refused:array<int,int>} */
     private function sendPending(SourceRecords $source, int $now): array
     {
         $pending = $this->settings->prefix.':pending';
-        $result = ['parts' => 0, 'records' => 0];
+        $result = ['parts' => 0, 'records' => 0, 'refused' => []];
         $members = $this->raw(['ZRANGE', $pending, '0', '-1']);
         foreach (is_array($members) ? $members : [] as $member) {
             [$start, $seconds, $shard, $part] = array_map(intval(...), explode(':', self::text($member)));
@@ -280,6 +442,9 @@ LUA;
             $this->raw(['ZREM', $pending, self::text($member)]);
             $result['parts']++;
             $result['records'] += $sent;
+            if ($sent < count($records)) {
+                $result['refused'][$start] = ($result['refused'][$start] ?? 0) + count($records) - $sent;
+            }
         }
 
         return $result;
@@ -292,7 +457,7 @@ LUA;
         if (is_string($reserved) || is_int($reserved)) {
             return self::integer($reserved);
         }
-        $end = self::integer($this->raw(['INCRBY', $this->settings->prefix.':positions:'.$this->settings->generation.':'.$this->settings->partition, (string) $count]));
+        $end = self::integer($this->raw(['INCRBY', $this->positions(), (string) $count]));
         $this->raw(['HSETNX', $base.':m', 'seq:'.$part, (string) ($end - $count + 1)]);
 
         return self::integer($this->raw(['HGET', $base.':m', 'seq:'.$part]));
@@ -301,6 +466,7 @@ LUA;
     /**
      * Send records in pages. A refused page is resent record by record and a refused
      * record is kept in the `failed` list. Returns the records accepted, or null to retry later.
+     * The highest accepted position is noted for the coverage frame.
      *
      * @param  list<array<string,mixed>>  $records
      */
@@ -311,6 +477,7 @@ LUA;
             try {
                 $source->send($this->settings->sourceId, $page);
                 $sent += count($page);
+                $this->accepted(self::integer(Wire::object($page[count($page) - 1]['position'])['sequence'] ?? null)); // positions ascend in a page
 
                 continue;
             } catch (SignalsFailure $failure) {
@@ -322,6 +489,7 @@ LUA;
                 try {
                     $source->send($this->settings->sourceId, [$record]);
                     $sent++;
+                    $this->accepted(self::integer(Wire::object($record['position'])['sequence'] ?? null));
                 } catch (SignalsFailure $failure) {
                     if (in_array($failure->status, self::RETRY, true)) {
                         return null;

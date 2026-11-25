@@ -30,8 +30,10 @@ return [
         'partition' => env('SIGNALS_API_PARTITION', '0'),
         'generation' => env('SIGNALS_API_GENERATION'),
         // Window length in seconds (60 to 3600) and how long after its end calls may still arrive.
+        // The coverage frame cannot pass a window's end before the grace is over, and Signals
+        // reads the source as stale once that is 120 s old: keep the grace at 60 or less.
         'window' => env('SIGNALS_API_WINDOW', 600),
-        'grace' => env('SIGNALS_API_GRACE', 120),
+        'grace' => env('SIGNALS_API_GRACE', 60),
         // Actors with a window of their own; the rest are folded into remainder windows.
         'max_actors' => env('SIGNALS_API_MAX_ACTORS', 500),
         // Redis (or Valkey) connection every application server shares. Calls are counted there,

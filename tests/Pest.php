@@ -99,6 +99,33 @@ function apiActivityErrors(array $record): array
     return $errors;
 }
 
+/** The 2.0.0 coverage schema and the cross-field rules of signalsd internal/canonical/validate.go (coverage). */
+function coverageErrors(array $frame): array
+{
+    $wire = json_decode(json_encode($frame, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION), flags: JSON_THROW_ON_ERROR);
+    $schema = json_decode(file_get_contents(__DIR__.'/Contracts/v2/coverage.schema.json'), flags: JSON_THROW_ON_ERROR);
+    $result = (new Validator)->validate($wire, $schema);
+    if (! $result->isValid()) {
+        return ['schema: '.json_encode((new ErrorFormatter)->format($result->error()))];
+    }
+    $errors = [];
+    $time = $frame['event_time'];
+    if (strtotime($time['from']) > strtotime($time['through'])) {
+        $errors[] = 'from after through';
+    }
+    if (($time['status'] === 'complete') !== ($time['reasons'] === [])) {
+        $errors[] = 'complete exactly when there are no reasons';
+    }
+    if ((int) $frame['commit_through'] > (int) $frame['position']['sequence']) {
+        $errors[] = 'commit beyond the position';
+    }
+    if (array_diff($frame['observed_families'], $frame['expected_families']) !== []) {
+        $errors[] = 'observed family not expected';
+    }
+
+    return $errors;
+}
+
 const WINDOW_START = 1793872800; // 2026-11-05T10:00:00Z, a multiple of 600
 
 function settings(int $maxActors = 500): ApiActivitySettings

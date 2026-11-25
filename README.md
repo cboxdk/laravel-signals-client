@@ -104,8 +104,8 @@ old-key signatures fail. Never put signing secrets in logs or queue metadata.
 ## API activity windows
 
 `Cbox\Signals\ApiActivity\CountApiActivity` counts an application's API calls per
-actor and sends them as closed `api.activity` windows (contract 2.6.0). Add it to the
-API middleware group and schedule the sender every minute:
+actor and sends them as closed `api.activity` windows (contract 2.6.0), with a coverage
+frame every minute. Add it to the API middleware group and schedule the sender every minute:
 
 ```php
 // bootstrap/app.php
@@ -162,7 +162,7 @@ Each window is split into `shards` key spaces by actor, each under one hash tag,
 Redis Cluster keeps each shard on one node.
 
 Each shard counts into a numbered part. `signals:api-activity` seals a part `grace`
-seconds (default 120) after its window ends, in one atomic script, after which calls go to
+seconds (default 60) after its window ends, in one atomic script, after which calls go to
 the next part; so a call lands in exactly one part. The command reads the sealed part,
 builds the records, reserves their source positions once, sends them, and only then
 deletes the part's keys. A retry rebuilds the same records with the same ids, positions
@@ -173,6 +173,35 @@ unites their references, so keep late records rare (each accepted record is one 
 event). A server that dies loses only the calls it had not yet counted, and never causes
 a call to be counted twice. A page that Signals refuses is resent record by record; a
 refused record is kept in the Redis list `signals:api:failed` (newest 1000).
+
+### Coverage frames
+
+Signals learns only from windows a coverage frame declares complete, and tells an idle
+API from a dead sender by the frame's age. After sending records, every run of
+`signals:api-activity` sends one coverage frame (contract 2.0.0) to the same endpoint,
+also when there were no calls: "Signals has every record whose window ends by
+`event_time.through`", with `commit_through` the highest position Signals accepted.
+
+- A record counts in the window it closes, so `through` stays a second short of the end
+  of every window Signals has not accepted: the window still counting or in its grace,
+  and a sealed part waiting to be sent. Once a window's parts are accepted, or it closed
+  without calls, `through` moves on to now. A window without calls is complete with
+  observed zero.
+- `through` never moves backwards and is stored in Redis before the frame is sent. While
+  a window cannot be sent `through` holds, and after two minutes Signals reads the
+  source as stale, as it would a dead sender.
+- A complete frame claims from the start of the lookback (or from the first frame this
+  client sent), so a window is complete again after a late part was accepted. While a
+  late part cannot be sent, or when Signals refused a record, the frame is `partial`
+  from that window on (`late_records_pending`, `records_refused`); a window with a
+  refused record is not claimed again. After Signals refused a frame, frames claim no
+  commit position (`commit_unknown`) until a record is accepted.
+
+Signals reads a source as stale when `through` is more than 120 s old. `through` passes a
+window's end only at the first run after its grace, so keep `grace` at 60 s or less and
+the window a multiple of 60 s, and do not let other scheduled commands delay this one
+much (`->runInBackground()` helps). The frame names the family `api.activity`, so the
+source grant must have exactly that family.
 
 ### Limits
 

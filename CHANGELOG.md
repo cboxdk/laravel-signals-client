@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0 - 2026-11-25
+
+- `signals:api-activity` sends a coverage frame (contract 2.0.0) every run, also when the API had no calls, so Signals can learn from `api.activity` windows and tell an idle API from a dead sender. `event_time.through` stays short of every window Signals has not accepted, never moves backwards, and holds while a send fails so the source reads stale. A late part that cannot be sent, or a refused record, makes the frame partial from that window. See "Coverage frames" in the README.
+- The default `grace` (`SIGNALS_API_GRACE`) is now 60 seconds instead of 120. With 120 the frame cannot pass a window's end until 120 s after it, and Signals would read the source as stale for a moment every window. Applications that set `SIGNALS_API_GRACE` above 60 should lower it.
+- `RedisApiActivityLog::flush()` also returns `coverage`: the completeness of the frame Signals accepted, or null.
+
 ## 0.1.0 - 2026-11-23
 
 First release.
