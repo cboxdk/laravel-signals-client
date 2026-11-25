@@ -47,6 +47,9 @@ switch ($argv[1] ?? '') {
 
             public function send(string $source, array $records): SourceReceipt
             {
+                if ($records[0]['kind'] === 'coverage') {
+                    return new SourceReceipt(1, 0, new DateTimeImmutable);
+                }
                 $lines = implode('', array_map(static fn (array $r): string => json_encode($r, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n", $records));
                 file_put_contents($this->file, $lines, FILE_APPEND | LOCK_EX);
 

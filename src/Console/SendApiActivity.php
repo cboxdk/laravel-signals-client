@@ -14,7 +14,7 @@ class SendApiActivity extends Command
 {
     protected $signature = 'signals:api-activity';
 
-    protected $description = 'Close finished API activity windows in Redis and send them to Cbox Signals';
+    protected $description = 'Close finished API activity windows in Redis, send them to Cbox Signals, and send a coverage frame';
 
     public function handle(RedisApiActivityLog $log, SourceRecords $source, ApiActivitySettings $settings): int
     {
@@ -26,7 +26,8 @@ class SendApiActivity extends Command
             return self::FAILURE;
         }
         $result = $log->flush($source, time());
-        $this->info("Closed {$result['parts']} window parts; Signals accepted {$result['records']} api.activity records. Refused records are kept in the Redis list {$settings->prefix}:failed.");
+        $coverage = $result['coverage'] === null ? 'no coverage frame was accepted' : "the coverage frame is {$result['coverage']}";
+        $this->info("Closed {$result['parts']} window parts; Signals accepted {$result['records']} api.activity records, and {$coverage}. Refused records are kept in the Redis list {$settings->prefix}:failed.");
 
         return self::SUCCESS;
     }
