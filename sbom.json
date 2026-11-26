@@ -1,7 +1,7 @@
 {
     "bomFormat": "CycloneDX",
     "specVersion": "1.5",
-    "serialNumber": "urn:uuid:eaab3631-c389-4893-953d-47e62c85c962",
+    "serialNumber": "urn:uuid:95a35ea7-e9e3-4d8f-aaf4-900f8b8bce33",
     "version": 1,
     "metadata": {
         "tools": [
@@ -785,11 +785,11 @@
         },
         {
             "type": "library",
-            "bom-ref": "pkg:composer/symfony/http-foundation@v8.1.11",
+            "bom-ref": "pkg:composer/symfony/http-foundation@v8.1.12",
             "group": "symfony",
             "name": "http-foundation",
-            "version": "v8.1.11",
-            "purl": "pkg:composer/symfony/http-foundation@v8.1.11",
+            "version": "v8.1.12",
+            "purl": "pkg:composer/symfony/http-foundation@v8.1.12",
             "description": "Defines an object-oriented layer for the HTTP specification",
             "licenses": [
                 {
@@ -801,11 +801,11 @@
         },
         {
             "type": "library",
-            "bom-ref": "pkg:composer/symfony/http-kernel@v8.1.11",
+            "bom-ref": "pkg:composer/symfony/http-kernel@v8.1.12",
             "group": "symfony",
             "name": "http-kernel",
-            "version": "v8.1.11",
-            "purl": "pkg:composer/symfony/http-kernel@v8.1.11",
+            "version": "v8.1.12",
+            "purl": "pkg:composer/symfony/http-kernel@v8.1.12",
             "description": "Provides a structured process for converting a Request into a Response",
             "licenses": [
                 {
@@ -817,11 +817,11 @@
         },
         {
             "type": "library",
-            "bom-ref": "pkg:composer/symfony/mailer@v8.1.10",
+            "bom-ref": "pkg:composer/symfony/mailer@v8.1.12",
             "group": "symfony",
             "name": "mailer",
-            "version": "v8.1.10",
-            "purl": "pkg:composer/symfony/mailer@v8.1.10",
+            "version": "v8.1.12",
+            "purl": "pkg:composer/symfony/mailer@v8.1.12",
             "description": "Helps sending emails",
             "licenses": [
                 {
@@ -1057,11 +1057,11 @@
         },
         {
             "type": "library",
-            "bom-ref": "pkg:composer/symfony/routing@v8.1.11",
+            "bom-ref": "pkg:composer/symfony/routing@v8.1.12",
             "group": "symfony",
             "name": "routing",
-            "version": "v8.1.11",
-            "purl": "pkg:composer/symfony/routing@v8.1.11",
+            "version": "v8.1.12",
+            "purl": "pkg:composer/symfony/routing@v8.1.12",
             "description": "Maps an HTTP request to a set of configuration variables",
             "licenses": [
                 {
