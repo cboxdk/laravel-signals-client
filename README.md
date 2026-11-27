@@ -452,12 +452,12 @@ application tests.
 `SIGNALS_MANAGED_TOKEN` (falling back to `SIGNALS_TOKEN`) is only the default
 credential; bind your own `ManagedCredential` to use a Cbox ID machine token.
 
-## MCP activity (local draft, not released)
+## MCP activity (Signals 2.8.0)
 
 ### Durable admission and complete coverage
 
 `McpActivity\DatabaseMcpActivityLog` implements `McpActivityLog` using PostgreSQL
-and the unpublished MCP migration. Supply a **dedicated connection to the same
+and the bundled MCP migration. Supply a **dedicated connection to the same
 database as the privacy registry**, outside application transactions. SQLite is
 supported for local tests only. The host must not execute a tool if `start()`
 throws or returns null. Database admission time, before tool lookup/validation,
@@ -491,8 +491,8 @@ retain their separate quality limits even when delivery is complete.
 Heartbeat retries preserve their bytes; fresh replacement frames use actual send
 time. Lost parts, privacy erasure and retention invalidate their intervals.
 Coverage can recover for later good intervals without repairing earlier gaps.
-The migration is still a local draft: recreate disposable MCP tables rather
-than treating it as an upgrade of a released database schema.
+Publish the `signals-migrations` tag and run its MCP migration before enabling admission.
+It creates new tables; it does not upgrade tables from unpublished development drafts.
 
 Capacity defaults to 10,000 pending attempts **plus retained parts**, including
 acknowledged parts kept for reconciliation and erasure. Full capacity refuses
@@ -513,7 +513,7 @@ old source registry/tombstone snapshot and resume its complete claims.
 ### Legacy fail-open journal
 
 `McpActivity\RedisMcpActivityLog` implements `Contracts\McpActivityLog` for
-draft Signals 2.8.0. A host supplies a server-owned `Catalog` of `Operation`
+Signals 2.8.0. A host supplies a server-owned `Catalog` of `Operation`
 values and a **separate** `McpActivity\Settings`/`ApiActivitySettings` source;
 it must not replace the REST collector's container binding. Register the host's
 dispatcher observer before tool lookup. `Attempt::capture()` retains only

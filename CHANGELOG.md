@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 - 2026-11-27
+
+- Add opt-in `mcp.activity` collection for Signals contract 2.8.0, independently of REST collection. PostgreSQL admission precedes tool dispatch; terminal outcomes, deadlines, immutable delivery parts and receipts determine finite coverage intervals.
+- Require explicit dispatcher-inventory confirmation before complete coverage. Unknown outcomes, missing evidence and erasure remain partial; complete measures admitted attempts, not service availability or all offered traffic.
+- Add bounded object-reference sets, dispatch-order prefixes, producer erasure fences and retention. The host supplies the catalog, dedicated database connection, migrations, source grant and maintenance schedule; installation activates none of these.
+- Provide a legacy Redis collector that never asserts complete coverage, and a fake for host tests. Existing REST interfaces and defaults are unchanged.
+
 ## 0.2.0 - 2026-11-25
 
 - `signals:api-activity` sends a coverage frame (contract 2.0.0) every run, also when the API had no calls, so Signals can learn from `api.activity` windows and tell an idle API from a dead sender. `event_time.through` stays short of every window Signals has not accepted, never moves backwards, and holds while a send fails so the source reads stale. A late part that cannot be sent, or a refused record, makes the frame partial from that window. See "Coverage frames" in the README.
