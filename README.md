@@ -451,3 +451,149 @@ application tests.
 
 `SIGNALS_MANAGED_TOKEN` (falling back to `SIGNALS_TOKEN`) is only the default
 credential; bind your own `ManagedCredential` to use a Cbox ID machine token.
+
+## MCP activity (local draft, not released)
+
+### Durable admission and complete coverage
+
+`McpActivity\DatabaseMcpActivityLog` implements `McpActivityLog` using PostgreSQL
+and the unpublished MCP migration. Supply a **dedicated connection to the same
+database as the privacy registry**, outside application transactions. SQLite is
+supported for local tests only. The host must not execute a tool if `start()`
+throws or returns null. Database admission time, before tool lookup/validation,
+is the start time; a caller's timestamp cannot insert into an already closed
+interval. A registration proves an admitted attempt, not execution of a mutation.
+
+`finish()` commits one terminal outcome; a deadline without a durable result
+becomes `unknown`. `flush()` seals closed windows only after their attempts have
+finalized, atomically assigns them to immutable parts, and sends up to 100 parts
+plus one finite coverage interval. The SQL outbox survives Redis loss and retries
+identical identities/payloads. A source-scoped PostgreSQL session lock serializes
+senders, while admission's short transactions do not wait for HTTP delivery.
+
+Set `Settings::dispatchProofConfirmed` only after the host verifies **all serving
+dispatchers** use this admission boundary. It defaults to false; unconfirmed
+inventory reports `dispatch_inventory_unconfirmed`, never complete. A changed
+assertion requires a fresh source generation, as do unobserved deployments,
+collector-disable periods and SQL restore/failover that may have lost committed
+writes. The library cannot detect an uninstrumented process or prove that a
+restored database contains every historical commit.
+
+Complete coverage requires a closed interval whose admitted count, sealed count
+and part counts reconcile, every part acknowledged, and no pending attempts,
+unknown outcomes, omitted attempts or invalidated evidence. A proved empty
+interval uses source position zero without creating an event. The initial
+partially observed window remains partial. This measures **admitted attempts**,
+not all offered HTTP/MCP traffic or service availability. Reference/sequence caps
+retain their separate quality limits even when delivery is complete.
+
+`status()` reports backlog and the last acknowledged finite coverage interval.
+Heartbeat retries preserve their bytes; fresh replacement frames use actual send
+time. Lost parts, privacy erasure and retention invalidate their intervals.
+Coverage can recover for later good intervals without repairing earlier gaps.
+The migration is still a local draft: recreate disposable MCP tables rather
+than treating it as an upgrade of a released database schema.
+
+Capacity defaults to 10,000 pending attempts **plus retained parts**, including
+acknowledged parts kept for reconciliation and erasure. Full capacity refuses
+new admission. Logical retention defaults to seven days (two hours to seven
+days configurable); SQL has no automatic TTL. The host must run flush/maintenance
+regularly for physical pruning, including draining old enabled generations before
+retirement. Up to 100 zero-window manifests are discovered per flush, with at most
+20,000 retained manifests and 128 registered SQL sources. No scheduler is installed.
+
+`McpActivityBuffers::erase()` removes SQL payloads and queues proof withdrawal in
+the same transaction as its tombstone, before legacy Redis cleanup. Ownership
+fingerprints are indexed alongside payloads and restored data is checked again.
+Conservatively the entire affected producer window is invalidated, which can
+also remove other actors in that window. The host must still call the engine's
+erasure API for accepted data and requests already in flight. Never restore an
+old source registry/tombstone snapshot and resume its complete claims.
+
+### Legacy fail-open journal
+
+`McpActivity\RedisMcpActivityLog` implements `Contracts\McpActivityLog` for
+draft Signals 2.8.0. A host supplies a server-owned `Catalog` of `Operation`
+values and a **separate** `McpActivity\Settings`/`ApiActivitySettings` source;
+it must not replace the REST collector's container binding. Register the host's
+dispatcher observer before tool lookup. `Attempt::capture()` retains only
+catalogued names, actor identity and keyed pseudonyms of complete allowlisted
+string object-id sets; raw arguments, results and IP addresses are not stored.
+
+Call `start($attempt)` once per dispatched tool attempt, then `finish($id,
+$outcome, $replayed)` on the observed terminal result. Null registration means
+the bounded journal refused the attempt. Progress is not a terminal result;
+consume a stream before declaring success. `FakeMcpActivityLog` is the host-test
+double, not a simulation of Redis deadlines. It is not installed automatically.
+
+An explicitly invoked `flush(SourceRecords $sender)` expires unresolved attempts
+to `unknown`, seals closed start-time windows and sends at most 100 records.
+Redis atomically chooses one finalization. Delivery retries retain the exact
+record identity and source position; a sender restart can find pending records
+older than one hour. A changed catalog policy, key (even reused key id), scope,
+namespace, deadline, window or retention cannot adopt an existing generation.
+Drain with the original configuration, then use a new generation.
+
+Defaults: a 300-second outcome deadline, at most 10,000 pending attempts plus
+sealed records, and seven-day logical buffer retention (configurable from two
+hours to seven days). Registration prunes expired pending entries; flushing also
+prunes expired sealed records before sending. Shared payload keys have Redis TTL
+so an abandoned collector cannot retain them forever; during inactivity an old
+entry can physically remain until the latest entry in that shared key expires.
+Run the explicit flush regularly for timely physical pruning. Configuration
+fingerprints and sequence counters remain without actor payload, preventing
+source-position reuse after expiry. Expiry counters are **lower bounds** because
+Redis TTL may remove idle data before the collector counts it.
+
+The journal capacity bounds distinct actors too; it does not reuse REST's
+`maxActors` setting or fold excess named actors. Excess registrations increment
+`refused`. Unidentified actors form remainder windows. Within each record there
+are at most 32 operations, 256 references per operation/768 total, 256 sequence
+runs and 1024 represented attempts. Byte-limit reduction preserves omission
+and overflow counts. One accepted window part remains one billable event.
+
+Each successful flush also sends a contract 2.0.0 family-coverage heartbeat.
+It reports the acknowledged source position and `unknown` coverage with
+`collector_fail_open`, or `partial` when refusals, expiry, erasure, unknown
+outcomes or omitted attempts are known. Pending records are explicit. Counters
+are cumulative per generation; they do not claim that every loss occurred in
+the heartbeat's lookback. `omitted_records` counts only discarded sealed windows,
+never attempts. Uncertain heartbeat delivery retries the same frame; stale frames
+are replaced. A consumer-rejected commit is retracted to zero, with
+`commit_unknown`, until a later record is acknowledged.
+
+**No complete training coverage is asserted.** A successful flush, an empty queue
+or zero traffic cannot prove that fail-open dispatch registration did not lose
+calls. Complete coverage requires independently durable dispatch evidence; do
+not switch the heartbeat to `complete` merely because Redis has recovered.
+
+Publish the new `signals-migrations` migration and supply
+`Contracts\McpActivityBuffers` as the journal's third constructor argument.
+The default `DatabaseMcpActivityBuffers` binding uses the host database and Redis.
+It durably registers each buffer before writing payloads and uses a database row
+lock across registration, finalization, delivery and erasure. Call it outside an
+outer application transaction so registration and erasure fences commit before
+Redis work. PostgreSQL concurrency is verified; in-memory SQLite tests alone are
+not concurrency evidence. All workers must use the same database/registry and
+stable Redis connection names. Do not change a registered connection's target;
+give a moved Redis database a new connection name and keep the old one reachable
+until its buffers have been erased or drained. The registry admits at most 128
+buffer identities; drain and explicitly retire obsolete entries before adding more.
+
+On verified privacy erasure, call `McpActivityBuffers::erase(Entity)` even when
+collection is disabled. It persists a one-way identity fingerprint, removes
+matching pending and sealed data across registered sources/generations, and
+refuses later registration. Cleanup failures propagate for retry; the fence
+survives Redis failure and is checked again before accessing restored buffers.
+Without named entity provenance, remainder/IP/device-only windows starting at or
+before an erasure are conservatively removed too, including unrelated anonymous
+history. Token revocation and organization archival are **not** privacy erasure.
+
+This handles producer buffers only. The host must also use the existing Signals
+erasure API for accepted data and derived models; its fence is required for an
+HTTP request already in flight when a sender loses its database connection.
+The serialized flush can delay registration, so production throughput and outage
+qualification remain required. No old REST buffers are recovered or migrated.
+
+Verify using a disposable Redis database only:
+`SIGNALS_TEST_REDIS=redis://127.0.0.1:6379/14 vendor/bin/pest` (the tests clear it).

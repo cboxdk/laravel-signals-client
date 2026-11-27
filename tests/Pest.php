@@ -3,6 +3,9 @@
 use Cbox\Signals\ApiActivity\ApiActivitySettings;
 use Cbox\Signals\ApiActivity\ApiActor;
 use Cbox\Signals\ApiActivity\ApiCall;
+use Cbox\Signals\McpActivity\Catalog;
+use Cbox\Signals\McpActivity\Operation;
+use Cbox\Signals\McpActivity\Settings;
 use Opis\JsonSchema\Errors\ErrorFormatter;
 use Opis\JsonSchema\Validator;
 
@@ -127,6 +130,11 @@ function coverageErrors(array $frame): array
 }
 
 const WINDOW_START = 1793872800; // 2026-11-05T10:00:00Z, a multiple of 600
+
+function mcpSettings(int $capacity = 10000): Settings
+{
+    return new Settings(ApiActivitySettings::testing(), new Catalog('catalog-1', [new Operation('pages', 'listPages'), new Operation('pages', 'getPage', 'page-v1', ['page_id'])]), capacity: $capacity);
+}
 
 function settings(int $maxActors = 500): ApiActivitySettings
 {

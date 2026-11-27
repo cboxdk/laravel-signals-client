@@ -16,11 +16,13 @@ use Cbox\Signals\Contracts\CountIntervals;
 use Cbox\Signals\Contracts\EventOutbox;
 use Cbox\Signals\Contracts\ManagedCredential;
 use Cbox\Signals\Contracts\ManagedIntegration;
+use Cbox\Signals\Contracts\McpActivityBuffers;
 use Cbox\Signals\Contracts\SignalInbox;
 use Cbox\Signals\Contracts\Signals;
 use Cbox\Signals\Contracts\SourceRecords;
 use Cbox\Signals\Managed\ConfiguredManagedCredential;
 use Cbox\Signals\Managed\HttpManagedIntegration;
+use Cbox\Signals\McpActivity\DatabaseMcpActivityBuffers;
 use Cbox\Signals\Support\JsonTransport;
 use Cbox\Signals\Webhooks\DatabaseSignalInbox;
 use Illuminate\Http\Client\Factory;
@@ -30,6 +32,7 @@ class SignalsServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->bindIf(McpActivityBuffers::class, fn (): DatabaseMcpActivityBuffers => new DatabaseMcpActivityBuffers($this->app->make('db')->connection(), $this->app->make('redis')));
         $this->app->bind(EventOutbox::class, fn () => new DatabaseEventOutbox($this->app->make('db')->connection(), $this->app->make(Signals::class)));
         $this->app->bind(SignalInbox::class, fn () => new DatabaseSignalInbox($this->app->make('db')->connection()));
         $this->mergeConfigFrom(__DIR__.'/../config/signals.php', 'signals');
