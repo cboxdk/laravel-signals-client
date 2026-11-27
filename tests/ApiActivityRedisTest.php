@@ -303,6 +303,65 @@ it('retries a page with the same records and positions, and keeps only a refused
     expect($failed)->toHaveCount(1)->and(json_decode($failed[0], true)['record']['position']['sequence'])->toBe('2');
 });
 
+it('retains sealed windows through repeated outages and retries unchanged after restarting the sender', function (string $failure): void {
+    $s = redisSettings(shards: 1);
+    $log = new RedisApiActivityLog($this->app->make('redis'), $s);
+    $log->record(call($s, 1000, '/v1/incidents/{incident}', 200, ['incident' => 'first']));
+    $log->record(call($s, 2000, '/v1/incidents/{incident}', 404, ['incident' => 'missing']));
+
+    $http = new Factory;
+    $bodies = [];
+    $http->fake(function (HttpRequest $request) use ($http, $failure, &$bodies) {
+        if ($request['records'][0]['kind'] === 'coverage') {
+            return $http->response(['accepted' => 1, 'duplicates' => 0, 'accepted_at' => '2026-11-05T12:00:00Z']);
+        }
+        $bodies[] = $request->body();
+        if (count($bodies) <= 2) {
+            return match ($failure) {
+                'json' => $http->response(['code' => 'project_backpressure'], 503),
+                'html' => $http->response('<html>Service unavailable</html>', 503),
+                'connection' => $http->failedConnection(),
+            };
+        }
+
+        return $http->response(['accepted' => 1, 'duplicates' => 0, 'accepted_at' => '2026-11-05T12:00:00Z']);
+    });
+    $source = new HttpSourceRecords(new JsonTransport($http, 'https://signals.test'), 'write-key');
+
+    expect($log->flush($source, WINDOW_START + 720))->toMatchArray(['parts' => 0, 'records' => 0]);
+    expect(Redis::connection()->llen('signals:api:failed'))->toBe(0);
+    // A late response must not change the sealed record waiting for its retry.
+    $log->record(call($s, 3000, '/v1/incidents/{incident}', 201, ['incident' => 'late']));
+    $log = new RedisApiActivityLog($this->app->make('redis'), $s);
+    expect($log->flush($source, WINDOW_START + 729))->toMatchArray(['parts' => 0, 'records' => 0]);
+    expect($bodies)->toHaveCount(1);
+    expect($log->flush($source, WINDOW_START + 730))->toMatchArray(['parts' => 0, 'records' => 0]);
+    expect($bodies)->toHaveCount(2);
+    expect($log->flush($source, WINDOW_START + 749))->toMatchArray(['parts' => 0, 'records' => 0]);
+    expect($bodies)->toHaveCount(2)
+        ->and(Redis::connection()->llen('signals:api:failed'))->toBe(0);
+
+    // Pending parts survive a sender restart and an outage beyond discovery's lookback.
+    $log = new RedisApiActivityLog($this->app->make('redis'), $s);
+    expect($log->flush($source, WINDOW_START + 7200))->toMatchArray(['parts' => 2, 'records' => 2]);
+    expect($bodies)->toHaveCount(4)
+        ->and($bodies[1])->toBe($bodies[0])
+        ->and($bodies[2])->toBe($bodies[0]);
+    $first = json_decode($bodies[2], true)['records'][0];
+    $late = json_decode($bodies[3], true)['records'][0];
+    expect(apiActivityErrors($first))->toBe([])
+        ->and(apiActivityErrors($late))->toBe([])
+        ->and(answered([$first]))->toBe(2)
+        ->and(answered([$late]))->toBe(1)
+        ->and($first['position']['sequence'])->toBe('1')
+        ->and($late['position']['sequence'])->toBe('2')
+        ->and($late['id'])->not->toBe($first['id'])
+        ->and(Redis::connection()->llen('signals:api:failed'))->toBe(0);
+    expect($log->flush($source, WINDOW_START + 7300))->toMatchArray(['parts' => 0, 'records' => 0]);
+    expect($bodies)->toHaveCount(4)
+        ->and(array_values(array_filter(Redis::connection()->keys('signals:api:{*'), fn ($k) => ! str_ends_with($k, '}:m'))))->toBe([]);
+})->with(['json', 'html', 'connection']);
+
 it('stays bounded in memory when an attack comes from 20000 addresses', function (): void {
     $s = redisSettings(maxActors: 100, tracked: 400);
     $log = new RedisApiActivityLog($this->app->make('redis'), $s);
